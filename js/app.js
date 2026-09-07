@@ -3,7 +3,7 @@
 const WEEKDAYS_SHORT = { "Montag": "Mo", "Dienstag": "Di", "Mittwoch": "Mi", "Donnerstag": "Do", "Freitag": "Fr", "Samstag": "Sa", "Sonntag": "So" };
 const MONTH_NAMES = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
 const TYPE_ICON = { lauf: "🏃", rad: "🚴", kraft: "🏋", core: "◆", emom: "⏱", sonstiges: "•" };
-const OVERRIDES_KEY = "basisOverrides_v1";
+const OVERRIDES_KEY = "basisOverrides_v2";
 
 let APP_DATA = null;
 
@@ -58,10 +58,12 @@ function loadOverrides() {
 function saveOverrides(o) {
   try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)); } catch { /* ignore */ }
 }
-function setUnitOverride(date, unitName, done) {
+const STATUS_CYCLE = { planned: "done", done: "skipped", skipped: "planned" };
+
+function setUnitOverride(date, unitName, status) {
   const overrides = loadOverrides();
   const day = overrides[date] || { units: {}, note: "" };
-  day.units[unitName] = done;
+  day.units[unitName] = status;
   overrides[date] = day;
   saveOverrides(overrides);
 }
@@ -79,7 +81,7 @@ function applyOverrides(data) {
     if (!day || !day.units) return;
     units.forEach(u => {
       if (Object.prototype.hasOwnProperty.call(day.units, u.name)) {
-        u.status = day.units[u.name] ? "done" : "planned";
+        u.status = day.units[u.name];
       }
     });
   };
@@ -203,15 +205,11 @@ function buildWeekOverview(data) {
   const todayDate = data.today.date;
   return data.week.days.map(d => {
     const unitsHtml = d.units.map(u => unitRowHtml(u, d.date)).join("");
-    const bwTag = d.bodyweightPlan
-      ? `<div style="font-size:10.5px; color:var(--muted); margin-top:2px;">+ ${escapeHtml(d.bodyweightPlan.name)}: ${d.bodyweightPlan.exercises.map(e => escapeHtml(e.name)).join(" · ")}</div>`
-      : "";
     return `
       <div class="day-col ${d.date === todayDate ? "is-today" : ""}">
         <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
         <div style="font-size:11px; color:var(--muted); margin-bottom:2px;">${escapeHtml(d.focus)}</div>
         <div class="stack" style="gap:6px;">${unitsHtml}</div>
-        ${bwTag}
         ${d.fallbackNote ? `<div class="fallback-note">${escapeHtml(d.fallbackNote)}</div>` : ""}
       </div>`;
   }).join("");
@@ -257,8 +255,8 @@ function setupInteractions() {
     if (typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE === "viewer") return;
     const dot = e.target.closest(".status-dot.clickable");
     if (!dot) return;
-    const currentlyDone = dot.classList.contains("done");
-    setUnitOverride(dot.dataset.toggleDate, dot.dataset.toggleUnit, !currentlyDone);
+    const current = ["done", "skipped", "planned"].find(s => dot.classList.contains(s)) || "planned";
+    setUnitOverride(dot.dataset.toggleDate, dot.dataset.toggleUnit, STATUS_CYCLE[current]);
     if (APP_DATA) renderAll(APP_DATA);
   });
 }
@@ -314,10 +312,6 @@ function renderHeute(data) {
       <span class="tag ${u.tag}">${u.tag}</span>
     </div>`).join("");
 
-  const bwCard = t.bodyweightPlan
-    ? `<div class="fallback-note"><b>Zusatz heute (${escapeHtml(t.bodyweightPlan.name)}):</b> ${t.bodyweightPlan.exercises.map(e => escapeHtml(e.name)).join(", ")} · Details im Tab „Kraft“</div>`
-    : "";
-
   document.getElementById("tab-heute").innerHTML = `
     <div class="page-head">
       <div class="page-eyebrow">${data.week.label}</div>
@@ -327,9 +321,8 @@ function renderHeute(data) {
 
     <div class="stack">
       <div class="card accent-teal">
-        <div class="card-head"><span class="card-title">Heutige Einheiten</span><span class="card-note">Kreis anklicken zum Abhaken</span></div>
+        <div class="card-head"><span class="card-title">Heutige Einheiten</span><span class="card-note">Kreis anklicken: geplant → erledigt → abgelehnt</span></div>
         <div class="unit-list">${unitsHtml}</div>
-        ${bwCard}
       </div>
 
       <div class="grid grid-2">
@@ -657,69 +650,56 @@ function renderCoach(data) {
 
 /* ---------- render: Kraft ---------- */
 
-function exerciseRowsHtml(plan) {
-  return plan.exercises.map(e => `
+function strengthUnitRow(u, dateStr) {
+  return `
     <div class="exercise-row">
-      <span class="exercise-name">${escapeHtml(e.name)}</span>
-      <span class="exercise-spec">${e.sets}×${e.reps} · ${escapeHtml(e.rest)} Pause</span>
-    </div>`).join("");
+      <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+        <span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+        <span class="exercise-name">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}</span>
+      </div>
+      <span class="exercise-spec">${escapeHtml(u.detail)}${u.plannedDurationMin ? ` · ~${u.plannedDurationMin} min` : ""}</span>
+    </div>`;
 }
 
 function renderKraft(data) {
-  const rotation = data.bodyweightRotation;
+  const isStrength = (u) => u.type === "kraft" || u.type === "emom";
   const todayEntry = data.week.days.find(d => d.date === data.today.date);
-  const todayPlan = todayEntry ? todayEntry.bodyweightPlan : null;
+  const todayUnits = todayEntry ? todayEntry.units.filter(isStrength) : [];
 
-  const todayCard = todayPlan
+  const todayCard = todayUnits.length
     ? `<div class="card accent-teal">
-         <div class="card-head"><span class="card-title">Heute</span><span class="plan-badge">${escapeHtml(todayPlan.name)}</span></div>
-         <div class="exercise-list">${exerciseRowsHtml(todayPlan)}</div>
+         <div class="card-head"><span class="card-title">Heute</span></div>
+         <div class="exercise-list">${todayUnits.map(u => strengthUnitRow(u, data.today.date)).join("")}</div>
        </div>`
-    : `<div class="card"><div class="card-head"><span class="card-title">Heute</span></div><div class="card-note">Kein Zusatz-Programm heute – ${escapeHtml(rotation?.excludeWeekday || "heute")} ist bereits der Arme/Schultern-Tag.</div></div>`;
+    : `<div class="card"><div class="card-head"><span class="card-title">Heute</span></div><div class="card-note">Kein Kraft-/EMOM-Programm heute.</div></div>`;
 
-  const plansOverview = (rotation ? rotation.plans : []).map(p => `
-    <div class="card">
-      <div class="card-head"><span class="card-title">${escapeHtml(p.name)}</span></div>
-      <div class="exercise-list">${exerciseRowsHtml(p)}</div>
-    </div>`).join("");
-
-  const kraftDays = data.week.days.map(d => {
-    const kraftUnits = d.units.filter(u => u.type === "kraft");
-    if (!kraftUnits.length && !d.bodyweightPlan) {
-      return `
-        <div class="day-col ${d.date === data.today.date ? "is-today" : ""}">
-          <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
-          <div class="card-note" style="margin-top:4px;">–</div>
-        </div>`;
-    }
-    const rows = kraftUnits.map(u => `
-      <div class="day-mini-unit">
-        <span class="status-dot ${u.status} clickable" data-toggle-date="${d.date}" data-toggle-unit="${escapeHtml(u.name)}"></span>
-        <span style="flex:1;">${escapeHtml(u.name)}<div class="unit-detail" style="margin-top:2px;">${escapeHtml(u.detail)}</div></span>
-      </div>`).join("");
-    const bw = d.bodyweightPlan
-      ? `<div class="day-mini-unit"><span class="status-dot planned" style="opacity:.35;"></span><span style="flex:1;">${escapeHtml(d.bodyweightPlan.name)}: ${d.bodyweightPlan.exercises.map(e => escapeHtml(e.name)).join(" · ")}</span></div>`
-      : "";
+  const weekDays = data.week.days.map(d => {
+    const units = d.units.filter(isStrength);
     return `
       <div class="day-col ${d.date === data.today.date ? "is-today" : ""}">
         <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
-        <div class="stack" style="gap:6px;">${rows}${bw}</div>
+        ${units.length
+          ? `<div class="stack" style="gap:6px;">${units.map(u => `
+              <div class="day-mini-unit">
+                <span class="status-dot ${u.status} clickable" data-toggle-date="${d.date}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+                <span style="flex:1;">${escapeHtml(u.name)}<div class="unit-detail" style="margin-top:2px;">${escapeHtml(u.detail)}</div></span>
+              </div>`).join("")}</div>`
+          : `<div class="card-note" style="margin-top:4px;">–</div>`}
       </div>`;
   }).join("");
 
   document.getElementById("tab-kraft").innerHTML = `
     <div class="page-head">
       <div class="page-eyebrow">Kraft</div>
-      <div class="page-title">Kraft- &amp; Zusatzprogramm</div>
-      <div class="page-sub">Klimmzüge/Liegestütze wechseln täglich ab (außer ${escapeHtml(rotation?.excludeWeekday || "Donnerstag")}) · plus deine Kraft-Einheiten aus dem Wochenplan</div>
+      <div class="page-title">Kraft- &amp; EMOM-Programm</div>
+      <div class="page-sub">Alle Kraft- und EMOM-Einheiten aus deinem Wochenplan an einem Ort</div>
     </div>
 
     <div class="stack">
       ${todayCard}
-      <div class="grid grid-2">${plansOverview}</div>
       <div class="card">
-        <div class="card-head"><span class="card-title">Kraft-Einheiten diese Woche</span></div>
-        <div class="week-grid">${kraftDays}</div>
+        <div class="card-head"><span class="card-title">Diese Woche</span></div>
+        <div class="week-grid">${weekDays}</div>
       </div>
     </div>`;
 }

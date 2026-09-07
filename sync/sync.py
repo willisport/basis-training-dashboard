@@ -59,14 +59,7 @@ def week_type_and_label(plan: dict, monday: datetime):
     return week_type, label
 
 
-def bodyweight_plan_for_date(rotation: dict, date: datetime, weekday: str):
-    if not rotation or weekday == rotation.get("excludeWeekday"):
-        return None
-    plans = rotation["plans"]
-    return plans[date.toordinal() % len(plans)]
-
-
-def build_day(plan_day: dict, date: datetime, activities: list, today: datetime, bw_rotation: dict) -> dict:
+def build_day(plan_day: dict, date: datetime, activities: list, today: datetime) -> dict:
     date_str = iso_date(date)
     day_acts = activities_on_date(activities, date_str)
     units = []
@@ -82,11 +75,9 @@ def build_day(plan_day: dict, date: datetime, activities: list, today: datetime,
             "name": pu["name"], "type": pu["type"], "tag": pu["tag"],
             "status": status, "detail": pu.get("detail", ""),
             **({"keySession": True} if pu.get("keySession") else {}),
+            **({"plannedDurationMin": pu["plannedDurationMin"]} if pu.get("plannedDurationMin") else {}),
         })
-    out = {
-        "date": date_str, "weekday": plan_day["weekday"], "focus": plan_day["focus"], "units": units,
-        "bodyweightPlan": bodyweight_plan_for_date(bw_rotation, date, plan_day["weekday"]),
-    }
+    out = {"date": date_str, "weekday": plan_day["weekday"], "focus": plan_day["focus"], "units": units}
     if plan_day.get("fallbackNote"):
         out["fallbackNote"] = plan_day["fallbackNote"]
     return out
@@ -169,9 +160,8 @@ def main():
     week_type, week_label = week_type_and_label(plan, this_monday)
     targets = plan["targetsByType"][week_type]
 
-    bw_rotation = plan.get("bodyweightRotation")
     week_days = [
-        build_day(plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today, bw_rotation)
+        build_day(plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today)
         for i in range(7)
     ]
     week_start_str, week_end_str = iso_date(this_monday), iso_date(this_monday + timedelta(days=6))
@@ -213,7 +203,6 @@ def main():
         "date": iso_date(today), "weekday": weekday_de(today),
         "dayFocus": plan["weekPattern"][today_idx]["focus"],
         "units": today_plan_units,
-        "bodyweightPlan": week_days[today_idx]["bodyweightPlan"],
         "sleep": {**sleep_today, "hrvBaseline": hrv_baseline},
         "body": {
             "weightKg": weight_on_or_before(weights, iso_date(today), fallback=(previous.get("today") or {}).get("body", {}).get("weightKg")),
@@ -310,7 +299,6 @@ def main():
         "week": week,
         "history": history,
         "performance": performance,
-        "bodyweightRotation": bw_rotation,
     }
 
     save_json(OUTPUT_PATH, output)
