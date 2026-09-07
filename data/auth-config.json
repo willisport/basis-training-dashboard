@@ -33,6 +33,12 @@
       "wrappedKey": "0XaOavB1nhD7XaWgykD93ApnJVSYS+km0+eIKOGt+qxmHQDCgrVrFOH2gox+en88",
       "role": "viewer",
       "sessionVersion": 2
+    },
+    "boss": {
+      "salt": "dfwUfkcXEgHAxgcoh/i1yg==",
+      "iv": "DjLLsnrqgd3QCsNT",
+      "wrappedKey": "5aVX69EX/gZ/37EnFUY56Nt1BAF6vj4US5sTdxr68AYK9J67NPYZV0EuDvwFklzD",
+      "role": "viewer"
     }
   }
 }
