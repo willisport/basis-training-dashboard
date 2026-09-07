@@ -62,6 +62,14 @@ async function decryptDataFile(dekRawBytes, encFile) {
   return JSON.parse(new TextDecoder().decode(plainBuf));
 }
 
+async function encryptJson(dekRawBytes, obj) {
+  const dekKey = await crypto.subtle.importKey("raw", dekRawBytes, "AES-GCM", false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plainBytes = new TextEncoder().encode(JSON.stringify(obj));
+  const ctBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, dekKey, plainBytes);
+  return { iv: bytesToB64(iv), ciphertext: bytesToB64(new Uint8Array(ctBuf)) };
+}
+
 function saveSession(dekRawBytes, role, username, sessionVersion) {
   try {
     localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
@@ -336,6 +344,7 @@ async function bootWithAuth(onData) {
     try {
       const encFile = await fetch(`${RAW_DATA_BASE}/data/training-data.enc.json`, { cache: "no-store" }).then(r => r.json());
       const data = await decryptDataFile(dekRawBytes, encFile);
+      await initOverridesFromServer();
       onData(data);
       setupLogoutControl();
       setupHostedSyncButton(onData);

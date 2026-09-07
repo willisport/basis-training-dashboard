@@ -56,14 +56,50 @@ function computeRecoveryScore(sleep) {
   return Math.round(parts.reduce((s, p) => s + p.value * p.weight, 0) / totalWeight);
 }
 
-/* ---------- manual overrides (Abhaken + Tagesnotiz), rein lokal im Browser ---------- */
+/* ---------- manual overrides (Abhaken + Tagesnotiz + Verschieben) ----------
+   Werden lokal gecacht (sofortige Reaktion, funktioniert auch offline) UND
+   verschluesselt zum Server gepusht, damit alle Geraete/Personen dieselben
+   Aenderungen sehen statt nur der Browser, auf dem sie gemacht wurden. */
+
+let CACHED_OVERRIDES = null;
+let overridesPushTimer = null;
 
 function loadOverrides() {
+  if (CACHED_OVERRIDES) return CACHED_OVERRIDES;
   try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || "{}"); }
   catch { return {}; }
 }
 function saveOverrides(o) {
+  CACHED_OVERRIDES = o;
   try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)); } catch { /* ignore */ }
+  clearTimeout(overridesPushTimer);
+  overridesPushTimer = setTimeout(() => pushOverridesToServer(o), 1500);
+}
+
+async function initOverridesFromServer() {
+  if (typeof IS_HOSTED === "undefined" || !IS_HOSTED || typeof CURRENT_DEK === "undefined" || !CURRENT_DEK) return;
+  try {
+    const encFile = await fetchFileViaGithubApi("data/overrides.enc.json");
+    CACHED_OVERRIDES = await decryptDataFile(CURRENT_DEK, encFile);
+  } catch {
+    // Datei existiert evtl. noch nicht (erste Nutzung) oder Abruf fehlgeschlagen -
+    // dann mit dem lokalen Stand weitermachen, bis der naechste Push klappt.
+    try { CACHED_OVERRIDES = JSON.parse(localStorage.getItem(OVERRIDES_KEY) || "{}"); }
+    catch { CACHED_OVERRIDES = {}; }
+  }
+}
+
+async function pushOverridesToServer(overrides) {
+  if (typeof IS_HOSTED === "undefined" || !IS_HOSTED || typeof CURRENT_DEK === "undefined" || !CURRENT_DEK) return;
+  if (!canEdit()) return;
+  try {
+    const encrypted = await encryptJson(CURRENT_DEK, overrides);
+    await fetch(HOSTED_SYNC_WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "save-overrides", payload: encrypted }),
+    });
+  } catch { /* naechste Aenderung versucht es erneut */ }
 }
 const STATUS_CYCLE = { planned: "done", done: "skipped", skipped: "planned" };
 
@@ -1162,10 +1198,30 @@ async function fetchIssueComments(issueNumber) {
   } catch { return []; }
 }
 
+const WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+
+function suggestReplyForRequest(text) {
+  if (!text || typeof APP_DATA === "undefined" || !APP_DATA) return "";
+  const mentioned = WEEKDAY_NAMES.find(w => text.toLowerCase().includes(w.toLowerCase()));
+  if (!mentioned) return "";
+  const day = APP_DATA.week.days.find(d => d.weekday === mentioned);
+  if (!day) return "";
+
+  const keyUnit = day.units.find(u => u.keySession);
+  const unitNames = day.units.map(u => u.name).join(", ") || "nichts Geplantes";
+
+  if (keyUnit) {
+    const altDay = APP_DATA.week.days.find(d => d.date > day.date && !d.units.some(u => u.keySession));
+    return `An ${mentioned} steht bei mir "${keyUnit.name}" als Schlüsseleinheit an – die würde ich unter der Woche nicht antasten.${altDay ? ` Wie wäre stattdessen ${altDay.weekday} (${fmtDateShort(altDay.date)})? Da ist nur ${altDay.units.map(u => u.name).join(", ") || "nichts"} geplant.` : " Lass uns einen anderen Tag finden."}`;
+  }
+  return `Passt bei mir! An ${mentioned} steht nur ${unitNames} an, das lässt sich gut kombinieren.`;
+}
+
 function requestItemHtml(issue, comments) {
   const isOpen = issue.state === "open";
   const commentsHtml = (comments || []).map(c => `
     <div class="qa-answer" style="margin-top:4px; padding-left:10px; border-left:2px solid var(--ocean-600);">${escapeHtml(c.body)}</div>`).join("");
+  const suggested = isOpen ? suggestReplyForRequest(`${issue.title} ${issue.body || ""}`) : "";
   return `
     <div class="qa-item" data-issue-number="${issue.number}">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -1176,8 +1232,9 @@ function requestItemHtml(issue, comments) {
       ${commentsHtml}
       <div class="card-note" style="margin-top:6px;">${new Date(issue.created_at).toLocaleDateString("de-DE")}</div>
       ${(canEdit() && isOpen) ? `
+        ${suggested ? `<div class="card-note" style="margin-top:8px; color:var(--teal);">Vorschlag anhand deines Trainingsplans – prüfen &amp; absenden:</div>` : ""}
         <div style="display:flex; gap:8px; margin-top:8px;">
-          <input type="text" class="text-input reply-request-input" placeholder="Antwort schreiben…" style="flex:1;" />
+          <input type="text" class="text-input reply-request-input" placeholder="Antwort schreiben…" style="flex:1;" value="${escapeHtml(suggested)}" />
           <button class="btn-small reply-request-btn" type="button" data-issue-number="${issue.number}">Antworten &amp; schließen</button>
         </div>
         <div class="card-note reply-request-status" style="margin-top:4px;"></div>` : ""}
