@@ -1361,8 +1361,20 @@ async function approveLoginRequest(issueNumber, statusEl, btn) {
     const result = await res.json();
     if (!result.ok) throw new Error(result.error || "Unbekannter Fehler");
     statusEl.style.color = "var(--teal)";
-    statusEl.textContent = "Freigeschaltet! Verschwindet gleich aus der Liste.";
-    setTimeout(() => { LOGIN_REQUESTS_CACHE = null; renderLogins(); }, 2500);
+    statusEl.textContent = "Freigeschaltet, warte auf Bestätigung…";
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        const config = await fetch(`${RAW_DATA_BASE}/data/auth-config.json`, { cache: "no-store" }).then(r => r.json());
+        const username = btn.dataset.username;
+        if (config.users && username && config.users[username]) {
+          CURRENT_AUTH_CONFIG = config;
+          break;
+        }
+      } catch { /* naechster Versuch */ }
+    }
+    LOGIN_REQUESTS_CACHE = null;
+    renderLogins();
   } catch (err) {
     if (String(err.message || err).includes("Freischalt-Code")) setAdminKey("");
     statusEl.style.color = "var(--amber, orange)";
@@ -1501,7 +1513,7 @@ async function revokeUser(username, statusEl, btn) {
     for (let i = 0; i < 12; i++) {
       await new Promise(r => setTimeout(r, 5000));
       try {
-        const config = await fetch("data/auth-config.json", { cache: "no-store" }).then(r => r.json());
+        const config = await fetch(`${RAW_DATA_BASE}/data/auth-config.json`, { cache: "no-store" }).then(r => r.json());
         if (!config.users || !config.users[username]) {
           CURRENT_AUTH_CONFIG = config;
           if (statusEl) statusEl.textContent = `"${username}" entfernt.`;

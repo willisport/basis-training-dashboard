@@ -4,6 +4,10 @@
 const AUTH_SESSION_KEY = "basisAuthSession_v2";
 const GITHUB_REPO = "willisport/willisport.github.io";
 const HOSTED_SYNC_WORKER_URL = "https://basis-sync-worker.willi-laurisch.workers.dev";
+/* Datendateien direkt von GitHub (raw), nicht ueber die Pages-Seite - so
+   sind Freischaltungen/Syncs sofort sichtbar, ohne auf einen kompletten
+   Pages-Rebuild warten zu muessen (der kann mehrere Minuten dauern). */
+const RAW_DATA_BASE = `https://raw.githubusercontent.com/${GITHUB_REPO}/main`;
 
 let CURRENT_ROLE = "owner";
 let CURRENT_USERNAME = "";
@@ -267,7 +271,7 @@ async function pollForFreshSync(prevSyncedAt, maxWaitMs = 120000, intervalMs = 8
   while (Date.now() - start < maxWaitMs) {
     await new Promise(r => setTimeout(r, intervalMs));
     try {
-      const encFile = await fetch("data/training-data.enc.json", { cache: "no-store" }).then(r => r.json());
+      const encFile = await fetch(`${RAW_DATA_BASE}/data/training-data.enc.json`, { cache: "no-store" }).then(r => r.json());
       const data = await decryptDataFile(CURRENT_DEK, encFile);
       if (data.syncedAt && data.syncedAt !== prevSyncedAt) return data;
     } catch { /* naechster Versuch */ }
@@ -289,8 +293,15 @@ function setupLoginsNavItem() {
 async function bootWithAuth(onData) {
   let authConfig = null;
   try {
-    const res = await fetch("data/auth-config.json", { cache: "no-store" });
-    if (res.ok) authConfig = await res.json();
+    const probe = await fetch("data/auth-config.json", { cache: "no-store" });
+    if (probe.ok) {
+      try {
+        const fresh = await fetch(`${RAW_DATA_BASE}/data/auth-config.json`, { cache: "no-store" });
+        authConfig = fresh.ok ? await fresh.json() : await probe.json();
+      } catch {
+        authConfig = await probe.json();
+      }
+    }
   } catch { /* kein Hosted-Modus */ }
 
   if (!authConfig) {
@@ -316,7 +327,7 @@ async function bootWithAuth(onData) {
     CURRENT_DEK = dekRawBytes;
     document.body.classList.toggle("is-viewer", role === "viewer");
     try {
-      const encFile = await fetch("data/training-data.enc.json", { cache: "no-store" }).then(r => r.json());
+      const encFile = await fetch(`${RAW_DATA_BASE}/data/training-data.enc.json`, { cache: "no-store" }).then(r => r.json());
       const data = await decryptDataFile(dekRawBytes, encFile);
       onData(data);
       setupLogoutControl();
