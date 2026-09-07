@@ -77,7 +77,7 @@ function showSignupForm(overlay) {
     <div class="login-brand">B</div>
     <div class="login-title">Login erstellen</div>
     <div class="login-sub">Wird als Anfrage an den Owner geschickt (GitHub-Account nötig zum Absenden). Dein Passwort verlässt nie diesen Browser im Klartext.</div>
-    <input type="text" id="signup-user" class="login-input" placeholder="Benutzername (z. B. henning)" autofocus />
+    <input type="text" id="signup-user" class="login-input" placeholder="Benutzername (z. B. max)" autofocus />
     <input type="password" id="signup-pw" class="login-input" placeholder="Passwort (dein eigenes, merken!)" style="margin-top:10px;" />
     <button id="signup-submit" class="login-submit-btn" style="margin-top:10px;">Anfrage senden</button>
     <div class="login-error" id="signup-error"></div>
