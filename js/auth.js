@@ -249,7 +249,7 @@ function setupHostedSyncButton(onData) {
         onData(gotFreshData);
         showSyncStatus(gotFreshData.syncedAt);
       } else if (panel) {
-        panel.innerHTML = `<div class="title">Sync läuft noch</div><div>Dauert diesmal länger – lad die Seite in 1–2 Minuten neu.</div>`;
+        panel.innerHTML = `<div class="title">Sync läuft noch</div><div>Dauert diesmal ungewöhnlich lang – lad die Seite in ein paar Minuten neu.</div>`;
       }
     } catch (err) {
       if (panel) {
@@ -264,12 +264,21 @@ function setupHostedSyncButton(onData) {
   });
 }
 
-async function pollForFreshSync(prevSyncedAt, maxWaitMs = 120000, intervalMs = 8000) {
+async function fetchFileViaGithubApi(path) {
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+    headers: { Accept: "application/vnd.github.raw+json" },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`GitHub API antwortete mit ${res.status}`);
+  return res.json();
+}
+
+async function pollForFreshSync(prevSyncedAt, maxWaitMs = 150000, intervalMs = 6000) {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     await new Promise(r => setTimeout(r, intervalMs));
     try {
-      const encFile = await fetch(`${RAW_DATA_BASE}/data/training-data.enc.json`, { cache: "no-store" }).then(r => r.json());
+      const encFile = await fetchFileViaGithubApi("data/training-data.enc.json");
       const data = await decryptDataFile(CURRENT_DEK, encFile);
       if (data.syncedAt && data.syncedAt !== prevSyncedAt) return data;
     } catch { /* naechster Versuch */ }

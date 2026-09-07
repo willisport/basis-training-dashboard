@@ -1365,7 +1365,7 @@ async function approveLoginRequest(issueNumber, statusEl, btn) {
     for (let i = 0; i < 10; i++) {
       await new Promise(r => setTimeout(r, 3000));
       try {
-        const config = await fetch(`${RAW_DATA_BASE}/data/auth-config.json`, { cache: "no-store" }).then(r => r.json());
+        const config = await fetchFileViaGithubApi("data/auth-config.json");
         const username = btn.dataset.username;
         if (config.users && username && config.users[username]) {
           CURRENT_AUTH_CONFIG = config;
@@ -1513,7 +1513,7 @@ async function revokeUser(username, statusEl, btn) {
     for (let i = 0; i < 12; i++) {
       await new Promise(r => setTimeout(r, 5000));
       try {
-        const config = await fetch(`${RAW_DATA_BASE}/data/auth-config.json`, { cache: "no-store" }).then(r => r.json());
+        const config = await fetchFileViaGithubApi("data/auth-config.json");
         if (!config.users || !config.users[username]) {
           CURRENT_AUTH_CONFIG = config;
           if (statusEl) statusEl.textContent = `"${username}" entfernt.`;
