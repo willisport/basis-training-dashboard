@@ -194,7 +194,7 @@ function setupLogoutControl() {
   const el = document.getElementById("role-chip");
   if (!el) return;
   el.hidden = false;
-  const label = CURRENT_USERNAME ? CURRENT_USERNAME : (CURRENT_ROLE === "owner" ? "Owner" : "Viewer");
+  const label = CURRENT_ROLE === "owner" ? "Owner" : (CURRENT_USERNAME || "Viewer");
   el.textContent = `${label} · abmelden`;
   el.addEventListener("click", () => {
     clearSession();
