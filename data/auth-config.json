@@ -30,7 +30,8 @@
       "salt": "73EwBYO+S71bwNa0oDXVBQ==",
       "iv": "EdIU+cIyTR8eZgJs",
       "wrappedKey": "0XaOavB1nhD7XaWgykD93ApnJVSYS+km0+eIKOGt+qxmHQDCgrVrFOH2gox+en88",
-      "role": "viewer"
+      "role": "viewer",
+      "sessionVersion": 1
     },
     "revoketest": {
       "salt": "c3pTeVr2eV0JmH9rwGHTkg==",
