@@ -33,12 +33,6 @@
       "wrappedKey": "0XaOavB1nhD7XaWgykD93ApnJVSYS+km0+eIKOGt+qxmHQDCgrVrFOH2gox+en88",
       "role": "viewer",
       "sessionVersion": 2
-    },
-    "revoketest": {
-      "salt": "c3pTeVr2eV0JmH9rwGHTkg==",
-      "iv": "t3oh92yjbQy65dVg",
-      "wrappedKey": "JRA1NqPXZxObiSTv3MDbX/iLngvhsebvbF2yYJORFnkZ+4gGaXofoOciQ69nwNWb",
-      "role": "owner"
     }
   }
 }
