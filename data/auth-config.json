@@ -45,12 +45,6 @@
       "iv": "XYVNpBQgRToFTdHd",
       "wrappedKey": "x/UnD7QhFkYBSo4bv1ecyCSZ8zm84GHtwY0NfiXphlv50K7Lm1WghPex6w74r7iG",
       "role": "viewer"
-    },
-    "pruefung2": {
-      "salt": "4wK8FQ7J+QepIJ5AhooRWQ==",
-      "iv": "NAaJAgB9lhqdY4yJ",
-      "wrappedKey": "TLnk3A09avqMI+xC3IxC7tq6r6nrkBtg+C/+if0+hr/VrnTLM6TmAR7pcJdI+rQS",
-      "role": "viewer"
     }
   }
 }
