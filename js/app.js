@@ -649,22 +649,28 @@ function renderHeute(data) {
 
 /* ---------- render: Woche ---------- */
 
-function weeklyStepsHtml(days) {
-  const maxSteps = Math.max(...days.map(d => d.steps || 0), 1);
-  const bars = days.map(d => {
-    const has = d.steps !== undefined && d.steps !== null;
-    const pct = has ? clamp((d.steps / maxSteps) * 100, 3, 100) : 0;
-    const overGoal = has && d.stepGoal && d.steps >= d.stepGoal;
+function weeklyStepsHtml(days, prevWeekAvg) {
+  const maxSteps = Math.max(...days.map(d => d.steps || 0), prevWeekAvg || 0, 1);
+  const barBlock = (value, label, color, has = true) => {
+    const pct = has ? clamp((value / maxSteps) * 100, 3, 100) : 0;
     return `
       <div style="display:flex; flex-direction:column; align-items:center; gap:6px; flex:1;">
-        <div style="font-size:11px; color:var(--muted);">${has ? d.steps.toLocaleString("de-DE") : "–"}</div>
+        <div style="font-size:11px; color:var(--muted);">${has ? Math.round(value).toLocaleString("de-DE") : "–"}</div>
         <div style="width:100%; height:50px; display:flex; align-items:flex-end; background:var(--surface-2); border-radius:4px; overflow:hidden;">
-          <div style="width:100%; height:${pct}%; background:${overGoal ? "var(--teal)" : "var(--ocean-500)"};"></div>
+          <div style="width:100%; height:${pct}%; background:${color};"></div>
         </div>
-        <div style="font-size:11px; color:var(--text-dim); font-weight:600;">${WEEKDAYS_SHORT[d.weekday]}</div>
+        <div style="font-size:11px; color:var(--text-dim); font-weight:600;">${label}</div>
       </div>`;
+  };
+  const bars = days.map(d => {
+    const has = d.steps !== undefined && d.steps !== null;
+    const overGoal = has && d.stepGoal && d.steps >= d.stepGoal;
+    return barBlock(d.steps || 0, WEEKDAYS_SHORT[d.weekday], overGoal ? "var(--teal)" : "var(--ocean-500)", has);
   }).join("");
-  return `<div style="display:flex; gap:8px;">${bars}</div>`;
+  const prevBar = (prevWeekAvg !== undefined && prevWeekAvg !== null)
+    ? `<div style="width:1px; background:var(--border-soft); align-self:stretch;"></div>${barBlock(prevWeekAvg, "Ø Vorwoche", "var(--amber)")}`
+    : "";
+  return `<div style="display:flex; gap:8px;">${bars}${prevBar}</div>`;
 }
 
 function renderWoche(data) {
@@ -698,7 +704,7 @@ function renderWoche(data) {
       ${w.days.some(d => d.steps !== undefined && d.steps !== null) ? `
       <div class="card">
         <div class="card-head"><span class="card-title">Schritte diese Woche</span><span class="card-note">Ø ${Math.round(w.days.filter(d => d.steps != null).reduce((s, d) => s + d.steps, 0) / w.days.filter(d => d.steps != null).length).toLocaleString("de-DE")} / Tag</span></div>
-        ${weeklyStepsHtml(w.days)}
+        ${weeklyStepsHtml(w.days, data.performance?.weeks?.length > 1 ? data.performance.weeks[data.performance.weeks.length - 2].avgSteps : null)}
       </div>` : ""}
 
       <div class="card accent-amber">
