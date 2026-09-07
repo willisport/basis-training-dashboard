@@ -1,0 +1,10 @@
+sync/.env
+sync/.garmin_tokens/
+sync/__pycache__/
+*.pyc
+sync/sync.log
+
+# Klartext-Trainingsdaten sollen NIE ins (oeffentliche) Repo -
+# nur data/training-data.enc.json (verschluesselt) und data/auth-config.json
+# (nur passwortverpackte Schluessel) sind fuer GitHub Pages gedacht.
+data/training-data.json

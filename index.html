@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#070c13">
+<title>Basis · Trainings-Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="shell">
+
+  <nav class="sidenav" aria-label="Hauptnavigation">
+    <div class="brand">
+      <span class="brand-mark">B</span>
+      <span class="brand-name">Basis</span>
+    </div>
+    <button class="nav-item is-active" data-tab="heute">
+      <span class="nav-icon" aria-hidden="true">◐</span><span>Heute</span>
+    </button>
+    <button class="nav-item" data-tab="woche">
+      <span class="nav-icon" aria-hidden="true">▦</span><span>Woche</span>
+    </button>
+    <button class="nav-item" data-tab="verlauf">
+      <span class="nav-icon" aria-hidden="true">↺</span><span>Verlauf</span>
+    </button>
+    <button class="nav-item" data-tab="performance">
+      <span class="nav-icon" aria-hidden="true">⤴</span><span>Performance</span>
+    </button>
+    <button class="nav-item" data-tab="coach">
+      <span class="nav-icon" aria-hidden="true">◆</span><span>Coach</span>
+    </button>
+    <button class="nav-item" data-tab="kraft">
+      <span class="nav-icon" aria-hidden="true">💪</span><span>Kraft</span>
+    </button>
+    <div class="sidenav-footer">
+      <div class="goal-label">Ziel</div>
+      <div class="goal-text" id="sidenav-goal">100&nbsp;km Ultra · Aug&nbsp;2027</div>
+      <div style="margin-top:12px;"><span class="role-chip" id="role-chip" hidden></span></div>
+    </div>
+  </nav>
+
+  <main class="content">
+
+    <section class="tab-panel is-active" id="tab-heute" data-tab-panel="heute"></section>
+    <section class="tab-panel" id="tab-woche" data-tab-panel="woche"></section>
+    <section class="tab-panel" id="tab-verlauf" data-tab-panel="verlauf"></section>
+    <section class="tab-panel" id="tab-performance" data-tab-panel="performance"></section>
+    <section class="tab-panel" id="tab-coach" data-tab-panel="coach"></section>
+    <section class="tab-panel" id="tab-kraft" data-tab-panel="kraft"></section>
+
+  </main>
+
+  <nav class="bottomnav" aria-label="Hauptnavigation mobil">
+    <button class="bn-item is-active" data-tab="heute"><span class="nav-icon" aria-hidden="true">◐</span><span>Heute</span></button>
+    <button class="bn-item" data-tab="woche"><span class="nav-icon" aria-hidden="true">▦</span><span>Woche</span></button>
+    <button class="bn-item" data-tab="verlauf"><span class="nav-icon" aria-hidden="true">↺</span><span>Verlauf</span></button>
+    <button class="bn-item" data-tab="performance"><span class="nav-icon" aria-hidden="true">⤴</span><span>Perf.</span></button>
+    <button class="bn-item" data-tab="coach"><span class="nav-icon" aria-hidden="true">◆</span><span>Coach</span></button>
+    <button class="bn-item" data-tab="kraft"><span class="nav-icon" aria-hidden="true">💪</span><span>Kraft</span></button>
+  </nav>
+
+</div>
+
+<button id="sync-btn" class="sync-btn" title="Garmin &amp; Waage jetzt synchronisieren">
+  <span class="icon">⟳</span><span id="sync-btn-label">Synchronisieren</span>
+</button>
+<div id="sync-panel" class="sync-panel" hidden></div>
+
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

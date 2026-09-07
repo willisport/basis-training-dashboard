@@ -1,0 +1,746 @@
+/* Basis · Trainings-Dashboard — Rendering & Coach-Logik */
+
+const WEEKDAYS_SHORT = { "Montag": "Mo", "Dienstag": "Di", "Mittwoch": "Mi", "Donnerstag": "Do", "Freitag": "Fr", "Samstag": "Sa", "Sonntag": "So" };
+const MONTH_NAMES = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+const TYPE_ICON = { lauf: "🏃", rad: "🚴", kraft: "🏋", core: "◆", emom: "⏱", sonstiges: "•" };
+const OVERRIDES_KEY = "basisOverrides_v1";
+
+let APP_DATA = null;
+
+/* ---------- utils ---------- */
+
+function fmtDateLong(iso) {
+  const d = new Date(iso + "T00:00:00");
+  const weekday = Object.keys(WEEKDAYS_SHORT)[(d.getDay() + 6) % 7];
+  return `${weekday}, ${d.getDate()}. ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+}
+function fmtDateShort(iso) {
+  const d = new Date(iso + "T00:00:00");
+  return `${String(d.getDate()).padStart(2,"0")}.${String(d.getMonth()+1).padStart(2,"0")}.`;
+}
+function fmtMin(min) {
+  if (min === null || min === undefined || Number.isNaN(min)) return "–";
+  if (min >= 60) {
+    const h = Math.floor(min / 60), m = Math.round(min % 60);
+    return m ? `${h} h ${m} min` : `${h} h`;
+  }
+  return `${Math.round(min)} min`;
+}
+function fmtPace(secPerKm) {
+  if (secPerKm === null || secPerKm === undefined || Number.isNaN(secPerKm)) return "–";
+  const m = Math.floor(secPerKm / 60), s = Math.round(secPerKm % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function fmtVal(v, unit = "") { return (v === null || v === undefined || Number.isNaN(v)) ? "–" : `${v}${unit}`; }
+function escapeHtml(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function computeRecoveryScore(sleep) {
+  const parts = [];
+  if (typeof sleep.sleepScore === "number") parts.push({ value: sleep.sleepScore, weight: 0.4 });
+  if (typeof sleep.bodyBattery === "number") parts.push({ value: sleep.bodyBattery, weight: 0.35 });
+  if (typeof sleep.hrv === "number" && typeof sleep.hrvBaseline === "number" && sleep.hrvBaseline > 0) {
+    parts.push({ value: Math.min(150, (sleep.hrv / sleep.hrvBaseline) * 100), weight: 0.25 });
+  }
+  if (!parts.length) return null;
+  const totalWeight = parts.reduce((s, p) => s + p.weight, 0);
+  return Math.round(parts.reduce((s, p) => s + p.value * p.weight, 0) / totalWeight);
+}
+
+/* ---------- manual overrides (Abhaken + Tagesnotiz), rein lokal im Browser ---------- */
+
+function loadOverrides() {
+  try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || "{}"); }
+  catch { return {}; }
+}
+function saveOverrides(o) {
+  try { localStorage.setItem(OVERRIDES_KEY, JSON.stringify(o)); } catch { /* ignore */ }
+}
+function setUnitOverride(date, unitName, done) {
+  const overrides = loadOverrides();
+  const day = overrides[date] || { units: {}, note: "" };
+  day.units[unitName] = done;
+  overrides[date] = day;
+  saveOverrides(overrides);
+}
+function setNoteOverride(date, text) {
+  const overrides = loadOverrides();
+  const day = overrides[date] || { units: {}, note: "" };
+  day.note = text;
+  overrides[date] = day;
+  saveOverrides(overrides);
+}
+function applyOverrides(data) {
+  const overrides = loadOverrides();
+  const applyTo = (units, dateStr) => {
+    const day = overrides[dateStr];
+    if (!day || !day.units) return;
+    units.forEach(u => {
+      if (Object.prototype.hasOwnProperty.call(day.units, u.name)) {
+        u.status = day.units[u.name] ? "done" : "planned";
+      }
+    });
+  };
+  applyTo(data.today.units, data.today.date);
+  data.week.days.forEach(d => applyTo(d.units, d.date));
+  data.today.note = (overrides[data.today.date] && overrides[data.today.date].note) || "";
+}
+
+/* ---------- progress bar system ---------- */
+
+function progressBar({ name, value, target, unit = "", decimals = 0, variant = "" }) {
+  const pct = target > 0 ? (value / target) * 100 : 0;
+  const widthPct = clamp(pct, 0, 100);
+  const cls = pct > 100 ? "over" : variant;
+  const valTxt = `${value.toFixed(decimals)}${unit}`;
+  const targetTxt = `${target.toFixed(decimals)}${unit}`;
+  return `
+    <div class="bar-block">
+      <div class="bar-top"><span class="name">${name}</span><span class="value">${valTxt} <span style="color:var(--muted);font-weight:600;">/ ${targetTxt}</span></span></div>
+      <div class="bar-track"><div class="bar-fill ${cls}" style="width:${widthPct}%"></div></div>
+    </div>`;
+}
+
+function miniBar(value, target, variant = "") {
+  const pct = target > 0 ? clamp((value / target) * 100, 0, 100) : 0;
+  const cls = (target > 0 && value / target > 1) ? "over" : variant;
+  return `<div class="bar-track bar-mini-track"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>`;
+}
+
+/* ---------- recovery ring ---------- */
+
+let ringCounter = 0;
+function recoveryRing(pct, valueLabel, sublabel) {
+  ringCounter++;
+  const gid = `ring-grad-${ringCounter}`;
+  const r = 40, c = 2 * Math.PI * r;
+  const offset = c * (1 - clamp(pct, 0, 100) / 100);
+  let stops;
+  if (pct >= 70) stops = ["#2f7dc4", "#2fd6a0"];
+  else if (pct >= 45) stops = ["#1d3a5f", "#5bc4f0"];
+  else stops = ["#3a2712", "#f2a13c"];
+  return `
+    <div class="ring-wrap">
+      <svg viewBox="0 0 96 96" width="96" height="96">
+        <defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${stops[0]}"/><stop offset="100%" stop-color="${stops[1]}"/>
+        </linearGradient></defs>
+        <circle class="ring-track" cx="48" cy="48" r="${r}"></circle>
+        <circle class="ring-fill" cx="48" cy="48" r="${r}" stroke="url(#${gid})"
+          stroke-dasharray="${c}" stroke-dashoffset="${offset}"></circle>
+      </svg>
+      <div class="ring-label"><span class="val">${valueLabel}</span><span class="lbl">${sublabel}</span></div>
+    </div>`;
+}
+
+/* ---------- line charts (no external lib) ---------- */
+
+function lineChartSVG(points, opts = {}) {
+  const w = 640, h = opts.compact ? 70 : 200;
+  if (!points || points.length === 0) {
+    return opts.compact ? `<svg class="chart-svg" viewBox="0 0 ${w} ${h}"></svg>`
+      : `<svg class="chart-svg" viewBox="0 0 ${w} ${h}"><text class="chart-axis-label" x="${w/2}" y="${h/2}" text-anchor="middle">noch keine Daten</text></svg>`;
+  }
+  const padL = opts.compact ? 2 : 40, padR = opts.compact ? 2 : 14;
+  const padT = opts.compact ? 4 : 16, padB = opts.compact ? 4 : 26;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const values = points.map(p => p.value);
+  let min = Math.min(...values), max = Math.max(...values);
+  if (min === max) { min -= 1; max += 1; }
+  const pad = (max - min) * 0.15;
+  min -= pad; max += pad;
+  const xStep = points.length > 1 ? innerW / (points.length - 1) : 0;
+
+  const xy = points.map((p, i) => {
+    const x = padL + i * xStep;
+    const t = (p.value - min) / (max - min);
+    const y = opts.invert ? padT + t * innerH : padT + innerH - t * innerH;
+    return { x, y, label: p.label, value: p.value };
+  });
+
+  const pathD = xy.map((p, i) => (i === 0 ? "M" : "L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+  const gid = "area-grad-" + Math.random().toString(36).slice(2, 8);
+  const areaD = `${pathD} L${xy[xy.length - 1].x.toFixed(1)},${padT + innerH} L${xy[0].x.toFixed(1)},${padT + innerH} Z`;
+
+  let gridLines = "", xLabels = "";
+  if (!opts.compact) {
+    gridLines = [0, 0.5, 1].map(f => {
+      const y = padT + innerH * f;
+      return `<line class="chart-grid-line" x1="${padL}" x2="${w - padR}" y1="${y}" y2="${y}"/>`;
+    }).join("");
+    const step = Math.max(1, Math.ceil(points.length / 6));
+    xLabels = xy.filter((_, i) => i % step === 0 || i === xy.length - 1)
+      .map(p => `<text class="chart-axis-label" x="${p.x}" y="${h - 8}" text-anchor="middle">${p.label}</text>`).join("");
+  }
+  const dots = xy.map(p => `<circle class="chart-dot" cx="${p.x}" cy="${p.y}" r="${opts.compact ? 2 : 3.2}"></circle>`).join("");
+
+  return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#5bc4f0" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="#5bc4f0" stop-opacity="0"/>
+      </linearGradient></defs>
+      ${gridLines}
+      <path d="${areaD}" fill="url(#${gid})" stroke="none"></path>
+      <path class="chart-line" d="${pathD}"></path>
+      ${opts.compact ? "" : dots}
+      ${xLabels}
+    </svg>`;
+}
+
+/* ---------- shared: full week overview (Heute + Woche + Kraft) ---------- */
+
+function unitRowHtml(u, dateStr) {
+  return `
+    <div class="day-mini-unit">
+      <span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+      <span style="flex:1;">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}</span>
+    </div>`;
+}
+
+function buildWeekOverview(data) {
+  const todayDate = data.today.date;
+  return data.week.days.map(d => {
+    const unitsHtml = d.units.map(u => unitRowHtml(u, d.date)).join("");
+    const bwTag = d.bodyweightPlan
+      ? `<div style="font-size:10.5px; color:var(--muted); margin-top:2px;">+ ${escapeHtml(d.bodyweightPlan.name)}: ${d.bodyweightPlan.exercises.map(e => escapeHtml(e.name)).join(" · ")}</div>`
+      : "";
+    return `
+      <div class="day-col ${d.date === todayDate ? "is-today" : ""}">
+        <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
+        <div style="font-size:11px; color:var(--muted); margin-bottom:2px;">${escapeHtml(d.focus)}</div>
+        <div class="stack" style="gap:6px;">${unitsHtml}</div>
+        ${bwTag}
+        ${d.fallbackNote ? `<div class="fallback-note">${escapeHtml(d.fallbackNote)}</div>` : ""}
+      </div>`;
+  }).join("");
+}
+
+/* ---------- sleep tips ---------- */
+
+function buildSleepTips(sleep) {
+  const tips = [];
+  if (sleep.totalMin != null && sleep.totalMin < 360) {
+    tips.push("Unter 6 h Schlaf – priorisiere heute Nacht eine frühere Bettzeit, besonders vor anspruchsvollen Einheiten.");
+  }
+  if (sleep.awakeMin != null && sleep.totalMin > 0 && sleep.awakeMin / sleep.totalMin > 0.12) {
+    tips.push("Recht viel Wachzeit in der Nacht – Bildschirmzeit/Koffein am Abend reduzieren, Zimmertemperatur prüfen.");
+  }
+  if (sleep.deepMin != null && sleep.totalMin > 0 && sleep.deepMin / sleep.totalMin < 0.10) {
+    tips.push("Wenig Tiefschlaf-Anteil – späte, schwere Mahlzeiten oder Alkohol am Abend können das drücken.");
+  }
+  if (sleep.sleepScore != null && sleep.sleepScore < 60) {
+    tips.push("Niedriger Schlaf-Score – heute bewusst genug Erholung zwischen den Einheiten einplanen.");
+  }
+  if (!tips.length) {
+    tips.push("Guter Schlaf letzte Nacht – solide Basis für die heutigen Einheiten.");
+  }
+  return tips;
+}
+
+/* ---------- tab navigation ---------- */
+
+function setupTabs() {
+  document.querySelectorAll("[data-tab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      document.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("is-active", b.dataset.tab === tab));
+      document.querySelectorAll("[data-tab-panel]").forEach(p => p.classList.toggle("is-active", p.dataset.tabPanel === tab));
+      window.scrollTo({ top: 0 });
+    });
+  });
+}
+
+function setupInteractions() {
+  document.body.addEventListener("click", (e) => {
+    if (typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE === "viewer") return;
+    const dot = e.target.closest(".status-dot.clickable");
+    if (!dot) return;
+    const currentlyDone = dot.classList.contains("done");
+    setUnitOverride(dot.dataset.toggleDate, dot.dataset.toggleUnit, !currentlyDone);
+    if (APP_DATA) renderAll(APP_DATA);
+  });
+}
+
+function setupSyncButton() {
+  const btn = document.getElementById("sync-btn");
+  const panel = document.getElementById("sync-panel");
+  const label = document.getElementById("sync-btn-label");
+  if (!btn) return;
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.classList.add("is-syncing");
+    label.textContent = "Synchronisiere…";
+    panel.hidden = true;
+
+    try {
+      const res = await fetch("/api/sync", { method: "POST" });
+      const result = await res.json();
+      const lines = (result.log || "").split("\n").map(l => l.trim()).filter(Boolean);
+      panel.innerHTML = `<div class="title">${result.ok ? "Sync erfolgreich" : "Sync fehlgeschlagen"}</div><ul>${lines.map(l => `<li>${escapeHtml(l)}</li>`).join("")}</ul>`;
+      panel.hidden = false;
+
+      if (result.ok) {
+        const freshData = await fetch("data/training-data.json?_=" + Date.now()).then(r => r.json());
+        renderAll(freshData);
+      }
+    } catch (err) {
+      panel.innerHTML = `<div class="title">Fehler beim Sync</div><div>${escapeHtml(String(err))}</div>`;
+      panel.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove("is-syncing");
+      label.textContent = "Synchronisieren";
+      setTimeout(() => { panel.hidden = true; }, 10000);
+    }
+  });
+}
+
+/* ---------- render: Heute ---------- */
+
+function renderHeute(data) {
+  const t = data.today;
+  const recoveryScore = computeRecoveryScore(t.sleep);
+
+  const unitsHtml = t.units.map(u => `
+    <div class="unit">
+      <span class="status-dot ${u.status} clickable" data-toggle-date="${t.date}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+      <div>
+        <div class="unit-name">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}</div>
+        <div class="unit-detail">${escapeHtml(u.detail)}${u.plannedDurationMin ? ` · ~${u.plannedDurationMin} min` : ""}</div>
+      </div>
+      <span class="tag ${u.tag}">${u.tag}</span>
+    </div>`).join("");
+
+  const bwCard = t.bodyweightPlan
+    ? `<div class="fallback-note"><b>Zusatz heute (${escapeHtml(t.bodyweightPlan.name)}):</b> ${t.bodyweightPlan.exercises.map(e => escapeHtml(e.name)).join(", ")} · Details im Tab „Kraft“</div>`
+    : "";
+
+  document.getElementById("tab-heute").innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">${data.week.label}</div>
+      <div class="page-title">${fmtDateLong(t.date)}</div>
+      <div class="page-sub">${escapeHtml(t.dayFocus)}</div>
+    </div>
+
+    <div class="stack">
+      <div class="card accent-teal">
+        <div class="card-head"><span class="card-title">Heutige Einheiten</span><span class="card-note">Kreis anklicken zum Abhaken</span></div>
+        <div class="unit-list">${unitsHtml}</div>
+        ${bwCard}
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head"><span class="card-title">Erholung</span><span class="card-note">Body Battery &amp; HRV</span></div>
+          <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+            ${recoveryRing(recoveryScore ?? 0, fmtVal(recoveryScore), "Score")}
+            <div class="grid" style="flex:1; grid-template-columns:1fr 1fr; gap:14px; min-width:180px;">
+              <div class="stat"><span class="stat-value">${fmtVal(t.sleep.restingHr)}<span class="unit">bpm</span></span><span class="stat-label">Ruhepuls</span></div>
+              <div class="stat"><span class="stat-value">${fmtVal(t.sleep.hrv)}<span class="unit">ms</span></span><span class="stat-label">HRV</span></div>
+              <div class="stat"><span class="stat-value">${fmtVal(t.sleep.bodyBattery)}</span><span class="stat-label">Body Battery</span></div>
+              <div class="stat"><span class="stat-value">${fmtVal(t.sleep.sleepScore)}</span><span class="stat-label">Schlaf-Score</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">Schlaf letzte Nacht</span><span class="card-note">${fmtMin(t.sleep.totalMin)} gesamt</span></div>
+          <div class="sleep-bar">
+            <div class="sleep-seg deep" style="width:${t.sleep.totalMin ? t.sleep.deepMin/t.sleep.totalMin*100 : 0}%"></div>
+            <div class="sleep-seg light" style="width:${t.sleep.totalMin ? t.sleep.lightMin/t.sleep.totalMin*100 : 0}%"></div>
+            <div class="sleep-seg rem" style="width:${t.sleep.totalMin ? t.sleep.remMin/t.sleep.totalMin*100 : 0}%"></div>
+            <div class="sleep-seg awake" style="width:${t.sleep.totalMin ? t.sleep.awakeMin/t.sleep.totalMin*100 : 0}%"></div>
+          </div>
+          <div class="sleep-legend">
+            <span class="lg"><span class="sw deep"></span>Tief ${fmtMin(t.sleep.deepMin)}</span>
+            <span class="lg"><span class="sw light"></span>Leicht ${fmtMin(t.sleep.lightMin)}</span>
+            <span class="lg"><span class="sw rem"></span>REM ${fmtMin(t.sleep.remMin)}</span>
+            <span class="lg"><span class="sw awake"></span>Wach ${fmtMin(t.sleep.awakeMin)}</span>
+          </div>
+          <ul class="tips-list">${buildSleepTips(t.sleep).map(x => `<li>${x}</li>`).join("")}</ul>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head"><span class="card-title">Wochenfortschritt</span><span class="card-note">Details im Tab „Woche“</span></div>
+          <div class="stack" style="gap:12px;">
+            ${progressBar({ name: "Lauf", value: data.week.actuals.runVolumeKm, target: data.week.targets.runVolumeKm, unit: " km", decimals: 1 })}
+            ${progressBar({ name: "Rad", value: data.week.actuals.bikeVolumeKm, target: data.week.targets.bikeVolumeKm, unit: " km", decimals: 1 })}
+            ${progressBar({ name: "Zeit", value: data.week.actuals.timeMin, target: data.week.targets.timeMin, unit: " min" })}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">Körperwerte</span></div>
+          <div class="stat-row">
+            <div class="stat"><span class="stat-value xl">${fmtVal(t.body.weightKg)}<span class="unit">kg</span></span><span class="stat-label">Gewicht</span></div>
+            <div class="stat"><span class="stat-value xl">${fmtVal(t.body.vo2max)}</span><span class="stat-label">VO2max</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Tagesnotiz</span><span class="card-note">fließt in die Coach-Einschätzung ein · <span id="note-saved-hint" class="note-saved-hint">gespeichert</span></span></div>
+        <textarea id="daily-note" class="note-box" ${typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE === "viewer" ? "readonly" : ""} placeholder="Wie fühlst du dich heute? z. B. Beine schwer, gut geschlafen, motiviert…">${escapeHtml(t.note || "")}</textarea>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Wochenübersicht</span><span class="card-note">Alle Einheiten dieser Woche</span></div>
+        <div class="week-grid">${buildWeekOverview(data)}</div>
+      </div>
+    </div>`;
+
+  const noteEl = document.getElementById("daily-note");
+  if (noteEl) {
+    let debounceTimer;
+    noteEl.addEventListener("input", () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        setNoteOverride(t.date, noteEl.value);
+        if (APP_DATA) {
+          APP_DATA.today.note = noteEl.value;
+          renderCoach(APP_DATA);
+        }
+        const hint = document.getElementById("note-saved-hint");
+        if (hint) {
+          hint.classList.add("show");
+          setTimeout(() => hint.classList.remove("show"), 1500);
+        }
+      }, 400);
+    });
+  }
+}
+
+/* ---------- render: Woche ---------- */
+
+function renderWoche(data) {
+  const w = data.week;
+  const selfCoachHtml = w.selfCoaching.map(s => `<li>${escapeHtml(s)}</li>`).join("");
+
+  document.getElementById("tab-woche").innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">${w.startDate === w.endDate ? "" : `${fmtDateShort(w.startDate)} – ${fmtDateShort(w.endDate)}`}</div>
+      <div class="page-title">${w.label}</div>
+      <div class="page-sub">Zielrhythmus: ${escapeHtml(data.profile.cycle)}</div>
+    </div>
+
+    <div class="stack">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Wochenfortschritt im Detail</span></div>
+        <div class="grid grid-2" style="gap:16px;">
+          ${progressBar({ name: "Lauf", value: w.actuals.runVolumeKm, target: w.targets.runVolumeKm, unit: " km", decimals: 1 })}
+          ${progressBar({ name: "Rad", value: w.actuals.bikeVolumeKm, target: w.targets.bikeVolumeKm, unit: " km", decimals: 1 })}
+          ${progressBar({ name: "Zeit", value: w.actuals.timeMin, target: w.targets.timeMin, unit: " min" })}
+          ${progressBar({ name: "Zone-2-Anteil", value: w.actuals.zone2SharePct, target: w.targets.zone2SharePct, unit: " %", variant: "good" })}
+        </div>
+        <div class="bar-block" style="margin-top:14px;">
+          <div class="bar-top"><span class="name">Belastung vs. Schnitt (letzte 4 Wochen)</span><span class="value">${w.actuals.loadVsAvgPct > 0 ? "+" : ""}${w.actuals.loadVsAvgPct}%</span></div>
+          <div class="bar-track"><div class="bar-fill ${w.actuals.loadVsAvgPct < -30 ? "low" : ""}" style="width:${clamp(w.actuals.loadVsAvgPct + 100, 0, 100)}%"></div></div>
+        </div>
+      </div>
+
+      <div class="week-grid">${buildWeekOverview(data)}</div>
+
+      <div class="card accent-amber">
+        <div class="card-head"><span class="card-title">Selbststeuerung &amp; Fallback</span></div>
+        <ul class="coach-reasons">${selfCoachHtml}</ul>
+      </div>
+    </div>`;
+}
+
+/* ---------- render: Verlauf ---------- */
+
+function renderVerlauf(data) {
+  const h = data.history;
+
+  const wc = h.weekCompare, mc = h.monthCompare;
+  const compareBlock = (a, b) => `
+    <div class="compare-pair">
+      <div class="compare-side"><span class="stat-value xl">${a.distanceKm}<span class="unit">km</span></span><div class="stat-label">${a.label}</div><div class="card-note">${a.sessions} Einheiten${a.note ? " · " + escapeHtml(a.note) : ""}</div></div>
+      <div class="compare-vs">vs</div>
+      <div class="compare-side"><span class="stat-value xl">${b.distanceKm}<span class="unit">km</span></span><div class="stat-label">${b.label}</div><div class="card-note">${b.sessions} Einheiten${b.note ? " · " + escapeHtml(b.note) : ""}</div></div>
+    </div>`;
+
+  const logHtml = h.log.map(l => `
+    <div class="log-row">
+      <span class="log-date">${fmtDateShort(l.date)}</span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="type-chip">${TYPE_ICON[l.type] || "•"}</span>
+        <div><div class="log-name">${escapeHtml(l.name)}</div>${l.note ? `<div class="log-note">${escapeHtml(l.note)}</div>` : ""}</div>
+      </div>
+      <span class="log-metric">${l.distanceKm ? l.distanceKm + " km" : fmtMin(l.durationMin)}</span>
+    </div>`).join("");
+
+  document.getElementById("tab-verlauf").innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Verlauf</div>
+      <div class="page-title">Wie du dich entwickelst</div>
+      <div class="page-sub">Vergleich zu vorheriger Woche &amp; vorherigem Monat</div>
+    </div>
+
+    <div class="stack">
+      <div class="grid grid-2">
+        <div class="card"><div class="card-head"><span class="card-title">Diese Woche vs. letzte Woche</span></div>${compareBlock(wc.thisWeek, wc.lastWeek)}</div>
+        <div class="card"><div class="card-head"><span class="card-title">Dieser Monat vs. letzter Monat</span></div>${compareBlock(mc.thisMonth, mc.lastMonth)}</div>
+      </div>
+
+      <div class="card flush">
+        <div style="padding:18px 20px 8px;"><span class="card-title">Log der letzten Einheiten</span></div>
+        <div class="log-list" style="padding:0 20px 20px;">${logHtml}</div>
+      </div>
+    </div>`;
+}
+
+/* ---------- render: Performance ---------- */
+
+function deltaInfo(firstVal, lastVal, { decimals = 0, unit = "", lowerIsBetter = false, sinceLabel, formatFn } = {}) {
+  if (firstVal === null || firstVal === undefined || lastVal === null || lastVal === undefined) {
+    return { text: "noch nicht genug Daten", up: true };
+  }
+  const diff = lastVal - firstVal;
+  const better = lowerIsBetter ? diff <= 0 : diff >= 0;
+  const shownDiff = formatFn ? formatFn(Math.abs(diff)) : Math.abs(diff).toFixed(decimals);
+  const sign = diff === 0 ? "±" : (lowerIsBetter ? (diff < 0 ? "−" : "+") : (diff >= 0 ? "+" : "−"));
+  return { text: `${sign}${shownDiff}${unit} seit ${sinceLabel}`, up: better };
+}
+
+function renderPerformance(data) {
+  const weeks = data.performance.weeks;
+  const first = weeks[0], last = weeks[weeks.length - 1];
+
+  const statCard = (label, valNow, valUnit, spark, delta) => `
+    <div class="card">
+      <div class="stat"><span class="stat-value">${valNow}<span class="unit">${valUnit}</span></span><span class="stat-label">${label}</span></div>
+      <div style="margin:8px 0 2px;">${lineChartSVG(spark, { compact: true })}</div>
+      <span class="stat-delta ${delta.up ? "up" : "down"}">${delta.text}</span>
+    </div>`;
+
+  const sparkOf = (key) => weeks.map(w => ({ value: w[key], label: w.label })).filter(p => p.value !== null && p.value !== undefined);
+
+  const runPacePoints = data.performance.runPace.map(p => ({ value: p.paceSecPerKm, label: fmtDateShort(p.date) }));
+  const bikeSpeedPoints = data.performance.bikeSpeed.map(p => ({ value: p.avgSpeedKmh, label: fmtDateShort(p.date) }));
+
+  document.getElementById("tab-performance").innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Performance</div>
+      <div class="page-title">Letzte 8 Wochen</div>
+      <div class="page-sub">${first.label} – ${last.label}</div>
+    </div>
+
+    <div class="stack">
+      <div class="grid-auto">
+        ${statCard("VO2max", fmtVal(last.vo2max), "", sparkOf("vo2max"),
+          deltaInfo(first.vo2max, last.vo2max, { sinceLabel: first.label }))}
+        ${statCard("Zone-2-Pace", fmtPace(last.zone2PaceSecPerKm), "/km", sparkOf("zone2PaceSecPerKm"),
+          deltaInfo(first.zone2PaceSecPerKm, last.zone2PaceSecPerKm, { unit: "s", sinceLabel: first.label, lowerIsBetter: true }))}
+        ${statCard("Laufumfang", fmtVal(last.runVolumeKm), "km", sparkOf("runVolumeKm"),
+          deltaInfo(first.runVolumeKm, last.runVolumeKm, { unit: " km", sinceLabel: first.label }))}
+        ${statCard("Radumfang", fmtVal(last.bikeVolumeKm), "km", sparkOf("bikeVolumeKm"),
+          deltaInfo(first.bikeVolumeKm, last.bikeVolumeKm, { unit: " km", sinceLabel: first.label }))}
+        ${statCard("Gewicht", fmtVal(last.weightKg), "kg", sparkOf("weightKg"),
+          deltaInfo(first.weightKg, last.weightKg, { decimals: 1, unit: " kg", sinceLabel: first.label, lowerIsBetter: true }))}
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Lauf-Tempo über die Zeit</span><span class="card-note">Zone-2 / lockere Läufe · min/km · niedriger = schneller</span></div>
+        ${lineChartSVG(runPacePoints, { invert: true })}
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Rad-Durchschnittsgeschwindigkeit</span><span class="card-note">km/h</span></div>
+        ${lineChartSVG(bikeSpeedPoints)}
+      </div>
+    </div>`;
+}
+
+/* ---------- coach rule engine ---------- */
+
+function buildCoachRecommendation(data) {
+  const t = data.today, w = data.week;
+  const recoveryScore = computeRecoveryScore(t.sleep);
+  const recoveryLow = recoveryScore !== null && recoveryScore < 55;
+  const dayIndex = w.days.findIndex(d => d.date === t.date);
+  const todayPlan = w.days[dayIndex];
+  const isKeyDay = todayPlan.units.some(u => u.keySession);
+  const weekFraction = (dayIndex + 1) / 7;
+  const expectedTimeMin = w.targets.timeMin * weekFraction;
+  const timeGapPct = w.targets.timeMin > 0 ? ((w.actuals.timeMin - expectedTimeMin) / w.targets.timeMin) * 100 : 0;
+
+  const reasons = [];
+  const hrvNote = (t.sleep.hrv && t.sleep.hrvBaseline) ? `, HRV ${t.sleep.hrv} ms vs. Basis ${t.sleep.hrvBaseline} ms` : "";
+  reasons.push(`Erholung: Score ${fmtVal(recoveryScore)} (Schlaf-Score ${fmtVal(t.sleep.sleepScore)}, Body Battery ${fmtVal(t.sleep.bodyBattery)}${hrvNote}).`);
+  reasons.push(`Wochenfortschritt: ${fmtMin(w.actuals.timeMin)} von ${fmtMin(w.targets.timeMin)} Zielzeit (Lauf ${w.actuals.runVolumeKm} km, Rad ${w.actuals.bikeVolumeKm} km) – Tag ${dayIndex + 1} von 7.`);
+
+  let headline;
+  if (recoveryLow && isKeyDay) {
+    const key = todayPlan.units.find(u => u.keySession);
+    headline = `Erholung ist niedrig, aber heute ist mit ${key.name} eine Schlüsseleinheit – lauf sie, nimm aber Tempo und Zusatzreize raus.`;
+    reasons.push(`${key.name} bleibt bestehen – das ist eine der beiden Laufeinheiten, die nicht durchs Rad ersetzt werden sollten.`);
+  } else if (recoveryLow) {
+    headline = `Heute eher locker – deine Erholung ist niedrig, das ist kein Tag zum Kämpfen.`;
+    reasons.push(`Falls die Beine grundsätzlich nicht mitmachen: ersatzweise ca. 90 min Rad Zone 2 statt der Laufeinheit.`);
+  } else if (isKeyDay) {
+    const key = todayPlan.units.find(u => u.keySession);
+    headline = `Heute zählt: ${key.name}. Der Rest der Woche kann sich danach richten.`;
+    reasons.push(`Erholung ist gut genug, um die Einheit wie geplant anzugehen (${escapeHtml(key.detail)}).`);
+  } else if (timeGapPct < -20 && dayIndex > 1) {
+    headline = `Du liegst zeitlich hinter deinem Wochenpensum – heute sauber Zone 2 abspulen, ohne zu überziehen.`;
+    reasons.push(`Rückstand von ca. ${Math.abs(timeGapPct).toFixed(0)}% zur erwarteten Trainingszeit an diesem Wochentag.`);
+  } else if (dayIndex === 0) {
+    headline = `Sauberer Start in die Woche: heute geht es um Konstanz in Zone 2, nicht um Tempo.`;
+    reasons.push(`Aerobe Basis entsteht über Wiederholbarkeit – lieber 5 bpm unter der Zielzone als 5 bpm drüber.`);
+  } else {
+    headline = `Konzentriere dich heute darauf, konstant in Zone 2 zu laufen.`;
+    reasons.push(`Kein akuter Handlungsbedarf – bleib beim Plan und achte auf die HF-Zone.`);
+  }
+
+  if (recoveryScore !== null && recoveryScore >= 55 && recoveryScore < 65) {
+    reasons.push(`Erholung ist solide, aber nicht top – Zusatzreize (EMOM/Core) bei Bedarf als erstes streichen.`);
+  }
+
+  if (t.note && t.note.trim()) {
+    const note = escapeHtml(t.note.trim());
+    const lower = t.note.toLowerCase();
+    if (/müde|kaputt|schwer|erschöpft|schlapp/.test(lower)) {
+      reasons.push(`Deine Notiz („${note}“) klingt nach Erschöpfung – nimm das ernst, auch wenn die Zahlen ok aussehen, und reduziere lieber Umfang oder Intensität.`);
+    } else if (/gut|stark|frisch|motiviert|fit/.test(lower)) {
+      reasons.push(`Deine Notiz („${note}“) klingt positiv – nutze den Schwung, ohne den Plan zu sprengen.`);
+    } else {
+      reasons.push(`Deine Notiz: „${note}“.`);
+    }
+  }
+
+  return { headline, reasons, recoveryScore, dayIndex, isKeyDay, timeGapPct };
+}
+
+/* ---------- render: Coach ---------- */
+
+function renderCoach(data) {
+  const rec = buildCoachRecommendation(data);
+  const w = data.week;
+
+  document.getElementById("tab-coach").innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Coach</div>
+      <div class="page-title">Deine Einschätzung für heute</div>
+      <div class="page-sub">Regelbasiert aus Erholung, Trainingslast, Wochenfortschritt, Konstanz &amp; deiner Notiz</div>
+    </div>
+
+    <div class="stack">
+      <div class="card coach-hero">
+        <div class="coach-headline">${rec.headline}</div>
+        <ul class="coach-reasons">${rec.reasons.map(r => `<li>${r}</li>`).join("")}</ul>
+      </div>
+
+      <div class="grid-auto">
+        <div class="card">
+          <div class="stat"><span class="stat-value">${fmtVal(rec.recoveryScore)}</span><span class="stat-label">Erholungs-Score</span></div>
+        </div>
+        <div class="card">
+          <div class="stat"><span class="stat-value">${fmtMin(w.actuals.timeMin)}<span class="unit">/ ${fmtMin(w.targets.timeMin)}</span></span><span class="stat-label">Wochenzeit</span></div>
+          ${miniBar(w.actuals.timeMin, w.targets.timeMin)}
+        </div>
+        <div class="card">
+          <div class="stat"><span class="stat-value">${w.actuals.runVolumeKm}<span class="unit">/ ${w.targets.runVolumeKm} km</span></span><span class="stat-label">Lauf diese Woche</span></div>
+          ${miniBar(w.actuals.runVolumeKm, w.targets.runVolumeKm)}
+        </div>
+        <div class="card">
+          <div class="stat"><span class="stat-value">${rec.dayIndex + 1}<span class="unit">/ 7</span></span><span class="stat-label">Wochentag</span></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ---------- render: Kraft ---------- */
+
+function exerciseRowsHtml(plan) {
+  return plan.exercises.map(e => `
+    <div class="exercise-row">
+      <span class="exercise-name">${escapeHtml(e.name)}</span>
+      <span class="exercise-spec">${e.sets}×${e.reps} · ${escapeHtml(e.rest)} Pause</span>
+    </div>`).join("");
+}
+
+function renderKraft(data) {
+  const rotation = data.bodyweightRotation;
+  const todayEntry = data.week.days.find(d => d.date === data.today.date);
+  const todayPlan = todayEntry ? todayEntry.bodyweightPlan : null;
+
+  const todayCard = todayPlan
+    ? `<div class="card accent-teal">
+         <div class="card-head"><span class="card-title">Heute</span><span class="plan-badge">${escapeHtml(todayPlan.name)}</span></div>
+         <div class="exercise-list">${exerciseRowsHtml(todayPlan)}</div>
+       </div>`
+    : `<div class="card"><div class="card-head"><span class="card-title">Heute</span></div><div class="card-note">Kein Zusatz-Programm heute – ${escapeHtml(rotation?.excludeWeekday || "heute")} ist bereits der Arme/Schultern-Tag.</div></div>`;
+
+  const plansOverview = (rotation ? rotation.plans : []).map(p => `
+    <div class="card">
+      <div class="card-head"><span class="card-title">${escapeHtml(p.name)}</span></div>
+      <div class="exercise-list">${exerciseRowsHtml(p)}</div>
+    </div>`).join("");
+
+  const kraftDays = data.week.days.map(d => {
+    const kraftUnits = d.units.filter(u => u.type === "kraft");
+    if (!kraftUnits.length && !d.bodyweightPlan) {
+      return `
+        <div class="day-col ${d.date === data.today.date ? "is-today" : ""}">
+          <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
+          <div class="card-note" style="margin-top:4px;">–</div>
+        </div>`;
+    }
+    const rows = kraftUnits.map(u => `
+      <div class="day-mini-unit">
+        <span class="status-dot ${u.status} clickable" data-toggle-date="${d.date}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+        <span style="flex:1;">${escapeHtml(u.name)}<div class="unit-detail" style="margin-top:2px;">${escapeHtml(u.detail)}</div></span>
+      </div>`).join("");
+    const bw = d.bodyweightPlan
+      ? `<div class="day-mini-unit"><span class="status-dot planned" style="opacity:.35;"></span><span style="flex:1;">${escapeHtml(d.bodyweightPlan.name)}: ${d.bodyweightPlan.exercises.map(e => escapeHtml(e.name)).join(" · ")}</span></div>`
+      : "";
+    return `
+      <div class="day-col ${d.date === data.today.date ? "is-today" : ""}">
+        <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
+        <div class="stack" style="gap:6px;">${rows}${bw}</div>
+      </div>`;
+  }).join("");
+
+  document.getElementById("tab-kraft").innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Kraft</div>
+      <div class="page-title">Kraft- &amp; Zusatzprogramm</div>
+      <div class="page-sub">Klimmzüge/Liegestütze wechseln täglich ab (außer ${escapeHtml(rotation?.excludeWeekday || "Donnerstag")}) · plus deine Kraft-Einheiten aus dem Wochenplan</div>
+    </div>
+
+    <div class="stack">
+      ${todayCard}
+      <div class="grid grid-2">${plansOverview}</div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Kraft-Einheiten diese Woche</span></div>
+        <div class="week-grid">${kraftDays}</div>
+      </div>
+    </div>`;
+}
+
+/* ---------- boot ---------- */
+
+function renderAll(data) {
+  applyOverrides(data);
+  APP_DATA = data;
+  document.getElementById("sidenav-goal").textContent = data.profile.goal.replace("Ultramarathon ", "");
+  renderHeute(data);
+  renderWoche(data);
+  renderVerlauf(data);
+  renderPerformance(data);
+  renderCoach(data);
+  renderKraft(data);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  setupTabs();
+  setupInteractions();
+  setupSyncButton();
+  bootWithAuth(renderAll);
+});

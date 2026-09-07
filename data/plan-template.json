@@ -1,0 +1,118 @@
+{
+  "profile": {
+    "tenKmTime": "47:40",
+    "thresholdPaceMinKm": "4:31",
+    "thresholdHr": 175,
+    "zone2HrLow": 130,
+    "zone2HrHigh": 135,
+    "zone2PaceFastMinKm": "6:00",
+    "zone2PaceSlowMinKm": "6:10",
+    "bikeAvgSpeedLowKmh": 25,
+    "bikeAvgSpeedHighKmh": 30,
+    "goal": "Ultramarathon 100 km, Zielmonat August 2027",
+    "cycle": "3 Aufbauwochen + 1 Recovery-Woche, wiederkehrend"
+  },
+
+  "rotation": {
+    "cycleStartMonday": "2026-08-24",
+    "pattern": ["aufbau", "aufbau", "aufbau", "recovery"]
+  },
+
+  "targetsByType": {
+    "aufbau": { "runVolumeKm": 35, "bikeVolumeKm": 130, "timeMin": 480, "zone2SharePct": 82 },
+    "recovery": { "runVolumeKm": 20, "bikeVolumeKm": 80, "timeMin": 300, "zone2SharePct": 90 }
+  },
+
+  "weekPattern": [
+    {
+      "weekday": "Montag",
+      "focus": "Zone-2-Lauf + schweres Beintraining",
+      "units": [
+        { "name": "Zone-2-Lauf", "type": "lauf", "tag": "pflicht", "detail": "6–8 km · 130–135 bpm · 6:00–6:10 min/km", "matchHint": { "activityTypes": ["running"] } },
+        { "name": "Schweres Beintraining", "type": "kraft", "tag": "pflicht", "detail": "Kniebeuge, Beinpresse, Ausfallschritte · 4×6–8 Wdh., 2–3 Wdh. im Tank, 2 min Pause", "matchHint": { "activityTypes": ["strength_training"] } }
+      ]
+    },
+    {
+      "weekday": "Dienstag",
+      "focus": "Rad Zone 2 + Core + EMOM",
+      "units": [
+        { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "60 min", "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
+        { "name": "Core", "type": "core", "tag": "ergaenzung", "detail": "10 min", "matchHint": { "activityTypes": ["strength_training", "cardio"] } },
+        { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "15 min", "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
+      ]
+    },
+    {
+      "weekday": "Mittwoch",
+      "focus": "Langer Lauf – Fokustag",
+      "units": [
+        { "name": "Langer Lauf", "type": "lauf", "tag": "pflicht", "detail": "15 km · Zone 2 (130–135 bpm, 6:00–6:10 min/km)", "keySession": true, "matchHint": { "activityTypes": ["running"], "minDistanceKm": 12 } },
+        { "name": "Bein-Stabi", "type": "kraft", "tag": "ergaenzung", "detail": "Einbeinstand, Copenhagen Plank, Nordic Hamstring Curls · 3×10–12 Wdh. pro Seite, direkt im Anschluss", "matchHint": { "activityTypes": ["strength_training"] } }
+      ],
+      "fallbackNote": "Schlüsseleinheit – nicht durchs Rad ersetzen."
+    },
+    {
+      "weekday": "Donnerstag",
+      "focus": "Rad Zone 2 + Arme/Schultern + Core",
+      "units": [
+        { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "60 min", "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
+        { "name": "Arme/Schultern", "type": "kraft", "tag": "ergaenzung", "detail": "Schulterdrücken, Bizepscurls, Trizepsdrücken · 3×10–12 Wdh.", "matchHint": { "activityTypes": ["strength_training"] } },
+        { "name": "Core", "type": "core", "tag": "bonus", "detail": "10 min", "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
+      ]
+    },
+    {
+      "weekday": "Freitag",
+      "focus": "Intervalle + Bein-Supersätze + EMOM",
+      "units": [
+        { "name": "Intervalle", "type": "lauf", "tag": "pflicht", "detail": "4×4 min hart (Zielpace ~4:15–4:30 min/km, nahe Schwellen-HF 175 bpm) / 3 min locker traben", "keySession": true, "matchHint": { "activityTypes": ["running"] } },
+        { "name": "Bein-Supersätze", "type": "kraft", "tag": "ergaenzung", "detail": "Beinstrecker + Beinbeuger + Wadenheben als Superset · 20 Wdh. je Übung, 2 min Pause, 3 Runden · danach Schienbein + Core · ≥6 h nach dem Lauf", "matchHint": { "activityTypes": ["strength_training"] } },
+        { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "15 min", "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
+      ],
+      "fallbackNote": "Schlüsseleinheit – nicht durchs Rad ersetzen. Bei toten Beinen: Supersätze weglassen."
+    },
+    {
+      "weekday": "Samstag",
+      "focus": "Rad Zone 2 + Core",
+      "units": [
+        { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "", "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
+        { "name": "Core", "type": "core", "tag": "ergaenzung", "detail": "10 min", "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
+      ]
+    },
+    {
+      "weekday": "Sonntag",
+      "focus": "Rad Zone 2 + EMOM",
+      "units": [
+        { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "ca. 90 min", "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
+        { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "15 min", "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
+      ]
+    }
+  ],
+
+  "selfCoaching": [
+    "Schweres Beintraining moderat fahren – 2–3 Wiederholungen im Tank lassen.",
+    "Bei toten Beinen am Freitag: Bein-Supersätze weglassen statt durchziehen.",
+    "Falls Laufen grundsätzlich nicht geht: stattdessen ca. 90 min Rad Zone 2 (außer Mittwoch & Freitag – die bleiben Lauf).",
+    "Der lockere Montags-Lauf kann bei Bedarf am ehesten durchs Rad ersetzt werden."
+  ],
+
+  "bodyweightRotation": {
+    "excludeWeekday": "Donnerstag",
+    "note": "Läuft zusätzlich zum jeweiligen Tagesplan, außer Donnerstag (da schon Arme/Schultern). Wechselt kontinuierlich Plan 1 / Plan 2, unabhängig von Wochengrenzen.",
+    "plans": [
+      {
+        "name": "Plan 1",
+        "exercises": [
+          { "name": "Klimmzüge", "sets": 4, "reps": "6–10", "rest": "90 s" },
+          { "name": "Liegestütze", "sets": 4, "reps": "12–15", "rest": "60 s" }
+        ]
+      },
+      {
+        "name": "Plan 2",
+        "exercises": [
+          { "name": "Klimmzüge", "sets": 4, "reps": "6–10", "rest": "90 s" },
+          { "name": "Liegestütze", "sets": 4, "reps": "12–15", "rest": "60 s" },
+          { "name": "Dips", "sets": 3, "reps": "8–12", "rest": "90 s" }
+        ]
+      }
+    ]
+  }
+}
