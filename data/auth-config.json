@@ -39,12 +39,6 @@
       "iv": "DjLLsnrqgd3QCsNT",
       "wrappedKey": "5aVX69EX/gZ/37EnFUY56Nt1BAF6vj4US5sTdxr68AYK9J67NPYZV0EuDvwFklzD",
       "role": "viewer"
-    },
-    "claudetest": {
-      "salt": "5tr1vRcP+Bdeqr37+gNLsw==",
-      "iv": "EnMXQ57fbeI4MsYC",
-      "wrappedKey": "XgBh6NYZJUX74D7cH8TpO1/qH8s6Hp4SSvdncHc7vIGsVCpm8KpRjOYb9HvzDb/m",
-      "role": "viewer"
     }
   }
 }
