@@ -76,6 +76,7 @@ def build_day(plan_day: dict, date: datetime, activities: list, today: datetime)
             "status": status, "detail": pu.get("detail", ""),
             **({"keySession": True} if pu.get("keySession") else {}),
             **({"plannedDurationMin": pu["plannedDurationMin"]} if pu.get("plannedDurationMin") else {}),
+            **({"planLabel": pu["planLabel"]} if pu.get("planLabel") else {}),
         })
     out = {"date": date_str, "weekday": plan_day["weekday"], "focus": plan_day["focus"], "units": units}
     if plan_day.get("fallbackNote"):
@@ -294,6 +295,7 @@ def main():
     performance = {"weeks": perf_weeks, "runPace": run_pace_points, "bikeSpeed": bike_speed_points}
 
     output = {
+        "syncedAt": datetime.now().isoformat(timespec="minutes"),
         "profile": {**plan["profile"], "vo2max": today_obj["body"]["vo2max"]},
         "today": today_obj,
         "week": week,

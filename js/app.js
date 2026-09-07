@@ -90,6 +90,49 @@ function applyOverrides(data) {
   data.today.note = (overrides[data.today.date] && overrides[data.today.date].note) || "";
 }
 
+/* ---------- manuelles Verschieben einer Einheit auf einen anderen Wochentag ---------- */
+
+function setMoveOverride(weekStart, homeWeekday, unitName, targetDate) {
+  const overrides = loadOverrides();
+  overrides.__moves = overrides.__moves || {};
+  const key = `${weekStart}|${homeWeekday}|${unitName}`;
+  if (targetDate === null) delete overrides.__moves[key];
+  else overrides.__moves[key] = targetDate;
+  saveOverrides(overrides);
+}
+
+function applyMoves(data) {
+  const overrides = loadOverrides();
+  const moves = overrides.__moves || {};
+  const weekStart = data.week.startDate;
+  const dayByWeekday = {};
+  data.week.days.forEach(d => {
+    dayByWeekday[d.weekday] = d;
+    d.units.forEach(u => { u.homeWeekday = d.weekday; });
+  });
+  Object.entries(moves).forEach(([key, targetDate]) => {
+    const [wk, homeWeekday, unitName] = key.split("|");
+    if (wk !== weekStart) return;
+    const homeDay = dayByWeekday[homeWeekday];
+    const targetDay = data.week.days.find(d => d.date === targetDate);
+    if (!homeDay || !targetDay || homeDay.date === targetDate) return;
+    const idx = homeDay.units.findIndex(u => u.name === unitName);
+    if (idx === -1) return;
+    const [unit] = homeDay.units.splice(idx, 1);
+    unit.movedFromWeekday = homeWeekday;
+    targetDay.units.push(unit);
+  });
+  const todayDay = data.week.days.find(d => d.date === data.today.date);
+  if (todayDay) data.today.units = todayDay.units;
+}
+
+function moveSelectHtml(u, currentDate, weekDays, weekStart) {
+  const options = weekDays.map(d =>
+    `<option value="${d.date}" ${d.date === currentDate ? "selected" : ""}>${WEEKDAYS_SHORT[d.weekday]}</option>`
+  ).join("");
+  return `<select class="move-select" data-week-start="${weekStart}" data-home-weekday="${u.homeWeekday}" data-move-unit="${escapeHtml(u.name)}" title="Einheit auf anderen Tag verschieben">${options}</select>`;
+}
+
 /* ---------- progress bar system ---------- */
 
 function progressBar({ name, value, target, unit = "", decimals = 0, variant = "" }) {
@@ -197,7 +240,11 @@ function unitRowHtml(u, dateStr) {
   return `
     <div class="day-mini-unit">
       <span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>
-      <span style="flex:1;">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}</span>
+      <span style="flex:1;">
+        ${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}${u.planLabel ? ` <span class="unit-key-badge" style="color:var(--sky-400);">${escapeHtml(u.planLabel)}</span>` : ""}
+        ${u.detail ? `<div class="unit-detail" style="margin-top:2px;">${escapeHtml(u.detail)}${u.plannedDurationMin ? ` · ~${u.plannedDurationMin} min` : ""}</div>` : ""}
+        ${u.movedFromWeekday ? `<div class="moved-note">verschoben von ${u.movedFromWeekday}</div>` : ""}
+      </span>
     </div>`;
 }
 
@@ -259,6 +306,17 @@ function setupInteractions() {
     setUnitOverride(dot.dataset.toggleDate, dot.dataset.toggleUnit, STATUS_CYCLE[current]);
     if (APP_DATA) renderAll(APP_DATA);
   });
+
+  document.body.addEventListener("change", (e) => {
+    if (typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE === "viewer") return;
+    const sel = e.target.closest(".move-select");
+    if (!sel) return;
+    const targetDate = sel.value;
+    const homeWeekday = sel.dataset.homeWeekday;
+    const isHome = APP_DATA && APP_DATA.week.days.find(d => d.weekday === homeWeekday)?.date === targetDate;
+    setMoveOverride(sel.dataset.weekStart, homeWeekday, sel.dataset.moveUnit, isHome ? null : targetDate);
+    if (APP_DATA) renderAll(APP_DATA);
+  });
 }
 
 function setupSyncButton() {
@@ -306,10 +364,12 @@ function renderHeute(data) {
     <div class="unit">
       <span class="status-dot ${u.status} clickable" data-toggle-date="${t.date}" data-toggle-unit="${escapeHtml(u.name)}"></span>
       <div>
-        <div class="unit-name">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}</div>
+        <div class="unit-name">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}${u.planLabel ? ` <span class="unit-key-badge" style="color:var(--sky-400);">${escapeHtml(u.planLabel)}</span>` : ""}</div>
         <div class="unit-detail">${escapeHtml(u.detail)}${u.plannedDurationMin ? ` · ~${u.plannedDurationMin} min` : ""}</div>
+        ${u.movedFromWeekday ? `<div class="moved-note">verschoben von ${u.movedFromWeekday}</div>` : ""}
       </div>
       <span class="tag ${u.tag}">${u.tag}</span>
+      ${moveSelectHtml(u, t.date, data.week.days, data.week.startDate)}
     </div>`).join("");
 
   document.getElementById("tab-heute").innerHTML = `
@@ -321,7 +381,7 @@ function renderHeute(data) {
 
     <div class="stack">
       <div class="card accent-teal">
-        <div class="card-head"><span class="card-title">Heutige Einheiten</span><span class="card-note">Kreis anklicken: geplant → erledigt → abgelehnt</span></div>
+        <div class="card-head"><span class="card-title">Heutige Einheiten</span><span class="card-note">Kreis: geplant → erledigt → abgelehnt · rechts: Einheit verschieben</span></div>
         <div class="unit-list">${unitsHtml}</div>
       </div>
 
@@ -451,12 +511,36 @@ function renderVerlauf(data) {
   const h = data.history;
 
   const wc = h.weekCompare, mc = h.monthCompare;
-  const compareBlock = (a, b) => `
-    <div class="compare-pair">
-      <div class="compare-side"><span class="stat-value xl">${a.distanceKm}<span class="unit">km</span></span><div class="stat-label">${a.label}</div><div class="card-note">${a.sessions} Einheiten${a.note ? " · " + escapeHtml(a.note) : ""}</div></div>
-      <div class="compare-vs">vs</div>
-      <div class="compare-side"><span class="stat-value xl">${b.distanceKm}<span class="unit">km</span></span><div class="stat-label">${b.label}</div><div class="card-note">${b.sessions} Einheiten${b.note ? " · " + escapeHtml(b.note) : ""}</div></div>
-    </div>`;
+  const compareBlock = (current, previous, currentHeading, previousHeading) => {
+    const max = Math.max(current.distanceKm, previous.distanceKm, 1);
+    const diff = current.distanceKm - previous.distanceKm;
+    const pct = previous.distanceKm > 0 ? Math.round((diff / previous.distanceKm) * 100) : (current.distanceKm > 0 ? 100 : 0);
+    const up = diff >= 0;
+    const deltaText = Math.abs(diff) < 0.05
+      ? "Genau wie zuvor"
+      : `${up ? "+" : ""}${diff.toFixed(1)} km (${up ? "+" : ""}${pct}%) ${up ? "mehr" : "weniger"} als ${previousHeading.toLowerCase()}`;
+    return `
+      <div class="compare-pair">
+        <div class="compare-side">
+          <div class="compare-heading">${currentHeading}</div>
+          <span class="stat-value xl">${current.distanceKm}<span class="unit">km</span></span>
+          <div class="stat-label">${current.label}</div>
+          <div class="card-note">${current.sessions} Einheiten${current.note ? " · " + escapeHtml(current.note) : ""}</div>
+        </div>
+        <div class="compare-vs">vs</div>
+        <div class="compare-side">
+          <div class="compare-heading" style="color:var(--muted);">${previousHeading}</div>
+          <span class="stat-value xl">${previous.distanceKm}<span class="unit">km</span></span>
+          <div class="stat-label">${previous.label}</div>
+          <div class="card-note">${previous.sessions} Einheiten${previous.note ? " · " + escapeHtml(previous.note) : ""}</div>
+        </div>
+      </div>
+      <div class="compare-bars">
+        <div class="compare-bar-row"><span class="compare-bar-label">${currentHeading}</span><div class="compare-bar-track"><div class="compare-bar-fill current" style="width:${(current.distanceKm / max * 100).toFixed(0)}%"></div></div></div>
+        <div class="compare-bar-row"><span class="compare-bar-label">${previousHeading}</span><div class="compare-bar-track"><div class="compare-bar-fill previous" style="width:${(previous.distanceKm / max * 100).toFixed(0)}%"></div></div></div>
+      </div>
+      <div class="compare-delta ${up ? "up" : "down"}">${deltaText}</div>`;
+  };
 
   const logHtml = h.log.map(l => `
     <div class="log-row">
@@ -477,8 +561,8 @@ function renderVerlauf(data) {
 
     <div class="stack">
       <div class="grid grid-2">
-        <div class="card"><div class="card-head"><span class="card-title">Diese Woche vs. letzte Woche</span></div>${compareBlock(wc.thisWeek, wc.lastWeek)}</div>
-        <div class="card"><div class="card-head"><span class="card-title">Dieser Monat vs. letzter Monat</span></div>${compareBlock(mc.thisMonth, mc.lastMonth)}</div>
+        <div class="card"><div class="card-head"><span class="card-title">Diese Woche vs. letzte Woche</span></div>${compareBlock(wc.thisWeek, wc.lastWeek, "Diese Woche", "Letzte Woche")}</div>
+        <div class="card"><div class="card-head"><span class="card-title">Dieser Monat vs. letzter Monat</span></div>${compareBlock(mc.thisMonth, mc.lastMonth, "Dieser Monat", "Letzter Monat")}</div>
       </div>
 
       <div class="card flush">
@@ -538,14 +622,16 @@ function renderPerformance(data) {
           deltaInfo(first.weightKg, last.weightKg, { decimals: 1, unit: " kg", sinceLabel: first.label, lowerIsBetter: true }))}
       </div>
 
-      <div class="card">
-        <div class="card-head"><span class="card-title">Lauf-Tempo über die Zeit</span><span class="card-note">Zone-2 / lockere Läufe · min/km · niedriger = schneller</span></div>
-        ${lineChartSVG(runPacePoints, { invert: true })}
-      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-head"><span class="card-title">Lauf-Tempo</span><span class="card-note">Zone-2 · min/km · niedriger = schneller</span></div>
+          ${lineChartSVG(runPacePoints, { invert: true })}
+        </div>
 
-      <div class="card">
-        <div class="card-head"><span class="card-title">Rad-Durchschnittsgeschwindigkeit</span><span class="card-note">km/h</span></div>
-        ${lineChartSVG(bikeSpeedPoints)}
+        <div class="card">
+          <div class="card-head"><span class="card-title">Rad-Schnitt</span><span class="card-note">km/h</span></div>
+          ${lineChartSVG(bikeSpeedPoints)}
+        </div>
       </div>
     </div>`;
 }
@@ -645,7 +731,109 @@ function renderCoach(data) {
           <div class="stat"><span class="stat-value">${rec.dayIndex + 1}<span class="unit">/ 7</span></span><span class="stat-label">Wochentag</span></div>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Frag den Coach</span><span class="card-note">Regelbasiert aus deinen Daten – kein echtes KI-Gespräch</span></div>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="coach-question" class="text-input" placeholder="z. B. „Wie ist mein Schlaf?“ oder „Soll ich heute laufen?“" />
+          <button id="coach-mic-btn" class="btn-small" type="button" title="Frage per Sprache eingeben">🎤</button>
+          <button id="coach-ask-btn" class="btn-small" type="button">Fragen</button>
+        </div>
+        <div id="coach-qa-log" class="stack" style="margin-top:12px; gap:8px;"></div>
+      </div>
     </div>`;
+
+  setupCoachQA(data);
+}
+
+function answerCoachQuestion(question, data) {
+  const q = question.toLowerCase();
+  const t = data.today, w = data.week;
+  const recoveryScore = computeRecoveryScore(t.sleep);
+  const findUnit = (name) => w.days.flatMap(d => d.units).find(u => u.name === name);
+
+  if (/schlaf/.test(q)) {
+    return `Letzte Nacht: ${fmtMin(t.sleep.totalMin)} gesamt, Schlaf-Score ${fmtVal(t.sleep.sleepScore)}. ${buildSleepTips(t.sleep)[0]}`;
+  }
+  if (/erholung|body battery|hrv/.test(q)) {
+    return `Erholungs-Score heute: ${fmtVal(recoveryScore)} (Body Battery ${fmtVal(t.sleep.bodyBattery)}, Schlaf-Score ${fmtVal(t.sleep.sleepScore)}, Ruhepuls ${fmtVal(t.sleep.restingHr)} bpm).`;
+  }
+  if (/gewicht/.test(q)) {
+    return `Aktuelles Gewicht: ${fmtVal(t.body.weightKg)} kg.`;
+  }
+  if (/vo2max/.test(q)) {
+    return `Aktueller VO2max-Wert: ${fmtVal(t.body.vo2max)}.`;
+  }
+  if (/rad/.test(q)) {
+    return `Diese Woche bisher ${w.actuals.bikeVolumeKm} von ${w.targets.bikeVolumeKm} km Rad-Ziel.`;
+  }
+  if (/(wie viel|wieviel|km).*lauf|lauf.*(woche|km)/.test(q)) {
+    return `Diese Woche bisher ${w.actuals.runVolumeKm} von ${w.targets.runVolumeKm} km Lauf-Ziel.`;
+  }
+  if (/zeit|trainiert|umfang/.test(q)) {
+    return `Diese Woche bisher ${fmtMin(w.actuals.timeMin)} von ${fmtMin(w.targets.timeMin)} Zielzeit trainiert.`;
+  }
+  if (/was.*heute|heute.*(einheit|plan)/.test(q)) {
+    return t.units.length
+      ? t.units.map(u => `${u.name} (${u.status === "done" ? "erledigt" : u.status === "skipped" ? "abgelehnt" : "geplant"})`).join(", ")
+      : "Heute stehen keine Einheiten an.";
+  }
+  if (/soll ich.*(laufen|trainieren|fahren)|heute.*(laufen|trainieren)/.test(q)) {
+    return buildCoachRecommendation(data).headline;
+  }
+  if (/langer lauf|lang.*lauf|mittwoch/.test(q)) {
+    const u = findUnit("Langer Lauf");
+    return u ? `Langer Lauf: ${u.detail}` : "Kein langer Lauf in dieser Woche gefunden.";
+  }
+  if (/intervall|freitag/.test(q)) {
+    const u = findUnit("Intervalle");
+    return u ? `Intervalle: ${u.detail}` : "Keine Intervalle in dieser Woche gefunden.";
+  }
+  if (/emom/.test(q)) {
+    const u = t.units.find(x => x.type === "emom");
+    return u ? `Heutiges EMOM: ${u.detail}` : "Heute steht kein EMOM an.";
+  }
+  return "Dazu hab ich noch keine feste Antwort. Frag z. B. nach Schlaf, Erholung, Gewicht, VO2max, Wochenfortschritt (Lauf/Rad/Zeit), dem langen Lauf, den Intervallen oder ob du heute trainieren solltest.";
+}
+
+function setupCoachQA(data) {
+  const input = document.getElementById("coach-question");
+  const askBtn = document.getElementById("coach-ask-btn");
+  const micBtn = document.getElementById("coach-mic-btn");
+  const log = document.getElementById("coach-qa-log");
+  if (!input) return;
+
+  const ask = () => {
+    const question = input.value.trim();
+    if (!question) return;
+    const answer = answerCoachQuestion(question, data);
+    const item = document.createElement("div");
+    item.className = "qa-item";
+    item.innerHTML = `<div class="qa-question">${escapeHtml(question)}</div><div class="qa-answer">${escapeHtml(answer)}</div>`;
+    log.prepend(item);
+    input.value = "";
+  };
+
+  askBtn.addEventListener("click", ask);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+
+  const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognitionImpl) {
+    micBtn.disabled = true;
+    micBtn.title = "Spracheingabe wird von diesem Browser nicht unterstützt";
+    return;
+  }
+  const recognition = new SpeechRecognitionImpl();
+  recognition.lang = "de-DE";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  micBtn.addEventListener("click", () => {
+    micBtn.classList.add("is-listening");
+    try { recognition.start(); } catch { /* schon aktiv */ }
+  });
+  recognition.addEventListener("result", (e) => { input.value = e.results[0][0].transcript; });
+  recognition.addEventListener("end", () => micBtn.classList.remove("is-listening"));
+  recognition.addEventListener("error", () => micBtn.classList.remove("is-listening"));
 }
 
 /* ---------- render: Kraft ---------- */
@@ -655,7 +843,7 @@ function strengthUnitRow(u, dateStr) {
     <div class="exercise-row">
       <div style="display:flex; align-items:center; gap:10px; min-width:0;">
         <span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>
-        <span class="exercise-name">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}</span>
+        <span class="exercise-name">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}${u.planLabel ? ` <span class="unit-key-badge" style="color:var(--sky-400);">${escapeHtml(u.planLabel)}</span>` : ""}</span>
       </div>
       <span class="exercise-spec">${escapeHtml(u.detail)}${u.plannedDurationMin ? ` · ~${u.plannedDurationMin} min` : ""}</span>
     </div>`;
@@ -679,11 +867,7 @@ function renderKraft(data) {
       <div class="day-col ${d.date === data.today.date ? "is-today" : ""}">
         <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
         ${units.length
-          ? `<div class="stack" style="gap:6px;">${units.map(u => `
-              <div class="day-mini-unit">
-                <span class="status-dot ${u.status} clickable" data-toggle-date="${d.date}" data-toggle-unit="${escapeHtml(u.name)}"></span>
-                <span style="flex:1;">${escapeHtml(u.name)}<div class="unit-detail" style="margin-top:2px;">${escapeHtml(u.detail)}</div></span>
-              </div>`).join("")}</div>`
+          ? `<div class="stack" style="gap:6px;">${units.map(u => unitRowHtml(u, d.date)).join("")}</div>`
           : `<div class="card-note" style="margin-top:4px;">–</div>`}
       </div>`;
   }).join("");
@@ -707,6 +891,7 @@ function renderKraft(data) {
 /* ---------- boot ---------- */
 
 function renderAll(data) {
+  applyMoves(data);
   applyOverrides(data);
   APP_DATA = data;
   document.getElementById("sidenav-goal").textContent = data.profile.goal.replace("Ultramarathon ", "");

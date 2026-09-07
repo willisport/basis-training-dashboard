@@ -109,6 +109,23 @@ function showLoginOverlay(authConfig, onSuccess) {
   pwInput.addEventListener("keydown", (e) => { if (e.key === "Enter") attempt(); });
 }
 
+function showSyncStatus(syncedAtIso) {
+  const el = document.getElementById("sync-status");
+  if (!el) return;
+  let label = "Automatisch synchronisiert (alle 30 Min)";
+  if (syncedAtIso) {
+    const d = new Date(syncedAtIso);
+    if (!Number.isNaN(d.getTime())) {
+      const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+      const ageMin = Math.round((Date.now() - d.getTime()) / 60000);
+      const ageTxt = ageMin < 1 ? "gerade eben" : ageMin < 60 ? `vor ${ageMin} min` : `vor ${Math.round(ageMin / 60)} h`;
+      label = `⟳ Zuletzt synchronisiert ${time} Uhr (${ageTxt})`;
+    }
+  }
+  el.textContent = label;
+  el.hidden = false;
+}
+
 function setupLogoutControl() {
   const el = document.getElementById("role-chip");
   if (!el) return;
@@ -158,6 +175,7 @@ async function bootWithAuth(onData) {
       const data = await decryptDataFile(dekRawBytes, encFile);
       onData(data);
       setupLogoutControl();
+      showSyncStatus(data.syncedAt);
     } catch (err) {
       document.getElementById("tab-heute").innerHTML =
         `<div class="card accent-amber"><b>Konnte Daten nicht entschlüsseln.</b><br>${err}</div>`;
