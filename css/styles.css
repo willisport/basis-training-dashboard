@@ -118,6 +118,7 @@ a { color: var(--sky-400); }
   cursor: pointer;
   transition: background .15s ease, color .15s ease;
 }
+.nav-item[hidden], .bn-item[hidden] { display: none !important; }
 .nav-item:hover { background: var(--surface-2); color: var(--text-dim); }
 .nav-item.is-active {
   background: linear-gradient(135deg, var(--ocean-700), var(--ocean-800));
