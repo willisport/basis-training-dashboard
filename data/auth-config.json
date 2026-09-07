@@ -35,9 +35,9 @@
       "sessionVersion": 2
     },
     "julius": {
-      "salt": "2o2piQH/ze2Ynn4w1EW9Hw==",
-      "iv": "TSSZ8IAXVVsoN2U+",
-      "wrappedKey": "jjGSiUNZAvOBc6EuKt1CFxZud737qLyjn4mcVlxspWllF5jgxd+rYFpaCB6npIvS",
+      "salt": "4wUFFLFHgX0LnjP1H3Ybzw==",
+      "iv": "g8C4i3La3KxINwJS",
+      "wrappedKey": "Chatyj48cRyO2IyWebF2AJhQnu0vrBxY/xxmDR8I8FpEXgNTW3XwsIvzLwLAxdgz",
       "role": "viewer"
     }
   }
