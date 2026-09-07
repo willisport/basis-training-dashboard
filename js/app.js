@@ -1200,28 +1200,31 @@ async function fetchIssueComments(issueNumber) {
 
 const WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 
-function suggestReplyForRequest(text) {
-  if (!text || typeof APP_DATA === "undefined" || !APP_DATA) return "";
-  const mentioned = WEEKDAY_NAMES.find(w => text.toLowerCase().includes(w.toLowerCase()));
-  if (!mentioned) return "";
-  const day = APP_DATA.week.days.find(d => d.weekday === mentioned);
-  if (!day) return "";
+function mentionedDaysContext(text) {
+  if (!text || typeof APP_DATA === "undefined" || !APP_DATA) return [];
+  const lower = text.toLowerCase();
+  return WEEKDAY_NAMES
+    .filter(w => lower.includes(w.toLowerCase()))
+    .map(w => APP_DATA.week.days.find(d => d.weekday === w))
+    .filter(Boolean);
+}
 
-  const keyUnit = day.units.find(u => u.keySession);
-  const unitNames = day.units.map(u => u.name).join(", ") || "nichts Geplantes";
-
-  if (keyUnit) {
-    const altDay = APP_DATA.week.days.find(d => d.date > day.date && !d.units.some(u => u.keySession));
-    return `An ${mentioned} steht bei mir "${keyUnit.name}" als Schlüsseleinheit an – die würde ich unter der Woche nicht antasten.${altDay ? ` Wie wäre stattdessen ${altDay.weekday} (${fmtDateShort(altDay.date)})? Da ist nur ${altDay.units.map(u => u.name).join(", ") || "nichts"} geplant.` : " Lass uns einen anderen Tag finden."}`;
-  }
-  return `Passt bei mir! An ${mentioned} steht nur ${unitNames} an, das lässt sich gut kombinieren.`;
+function dayContextHtml(day) {
+  const unitsHtml = day.units.length
+    ? day.units.map(u => `<div class="day-mini-unit"><span style="flex:1;">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}</span>${moveSelectHtml(u, day.date, APP_DATA.week.days, APP_DATA.week.startDate)}${autoMoveButtonHtml(u)}</div>`).join("")
+    : `<div class="card-note">Nichts geplant.</div>`;
+  return `
+    <div style="margin-top:8px; padding:10px; border-radius:8px; background:var(--surface-2);">
+      <div class="card-note" style="margin-bottom:6px;"><b>${day.weekday} (${fmtDateShort(day.date)})</b> aktuell geplant – hier direkt verschieben, falls nötig:</div>
+      ${unitsHtml}
+    </div>`;
 }
 
 function requestItemHtml(issue, comments) {
   const isOpen = issue.state === "open";
   const commentsHtml = (comments || []).map(c => `
     <div class="qa-answer" style="margin-top:4px; padding-left:10px; border-left:2px solid var(--ocean-600);">${escapeHtml(c.body)}</div>`).join("");
-  const suggested = isOpen ? suggestReplyForRequest(`${issue.title} ${issue.body || ""}`) : "";
+  const days = (canEdit() && isOpen) ? mentionedDaysContext(`${issue.title} ${issue.body || ""}`) : [];
   return `
     <div class="qa-item" data-issue-number="${issue.number}">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -1231,10 +1234,10 @@ function requestItemHtml(issue, comments) {
       ${issue.body ? `<div class="qa-answer" style="margin-top:4px;">${escapeHtml(issue.body.slice(0, 300))}</div>` : ""}
       ${commentsHtml}
       <div class="card-note" style="margin-top:6px;">${new Date(issue.created_at).toLocaleDateString("de-DE")}</div>
+      ${days.map(dayContextHtml).join("")}
       ${(canEdit() && isOpen) ? `
-        ${suggested ? `<div class="card-note" style="margin-top:8px; color:var(--teal);">Vorschlag anhand deines Trainingsplans – prüfen &amp; absenden:</div>` : ""}
         <div style="display:flex; gap:8px; margin-top:8px;">
-          <input type="text" class="text-input reply-request-input" placeholder="Antwort schreiben…" style="flex:1;" value="${escapeHtml(suggested)}" />
+          <input type="text" class="text-input reply-request-input" placeholder="Antwort schreiben (optional)…" style="flex:1;" />
           <button class="btn-small reply-request-btn" type="button" data-issue-number="${issue.number}">Antworten &amp; schließen</button>
         </div>
         <div class="card-note reply-request-status" style="margin-top:4px;"></div>` : ""}
