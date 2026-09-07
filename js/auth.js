@@ -245,6 +245,7 @@ function setupHostedSyncButton(onData) {
       if (gotFreshData) {
         if (panel) panel.innerHTML = `<div class="title">Sync erfolgreich</div><div>Daten sind aktuell.</div>`;
         onData(gotFreshData);
+        showSyncStatus(gotFreshData.syncedAt);
       } else if (panel) {
         panel.innerHTML = `<div class="title">Sync läuft noch</div><div>Dauert diesmal länger – lad die Seite in 1–2 Minuten neu.</div>`;
       }
