@@ -51,6 +51,12 @@
       "iv": "tEW2DJfU+W0WzZ4D",
       "wrappedKey": "eP8tnd4a70PEMo4qZzST/BPkxi5381xDR9SLiN+dj6Sb1606AcXJadcy53BBNnrk",
       "role": "viewer"
+    },
+    "mechtest3": {
+      "salt": "SvxN4ZlFL6eR5aC1KYZImg==",
+      "iv": "wIr/e1Y67lVpR9uB",
+      "wrappedKey": "8whCVdAeHhcL+OB3/uFaZ1uQqEypWRA1VU/aETIFL+YjerrZyxtr38/v4GJxXOGJ",
+      "role": "viewer"
     }
   }
 }
