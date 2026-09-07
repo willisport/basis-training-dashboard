@@ -51,12 +51,6 @@
       "iv": "tEW2DJfU+W0WzZ4D",
       "wrappedKey": "eP8tnd4a70PEMo4qZzST/BPkxi5381xDR9SLiN+dj6Sb1606AcXJadcy53BBNnrk",
       "role": "viewer"
-    },
-    "stepcheck": {
-      "salt": "cWAqf7iD0bCBN6HKOTG7IA==",
-      "iv": "czatuqIqtlsIbBoP",
-      "wrappedKey": "j86PakAWJj3yBJ10BzjcHEgzvtuhT7EbBmFsCPPSvbO9Iv4MqDB9fsgHbJt6nlSo",
-      "role": "viewer"
     }
   }
 }
