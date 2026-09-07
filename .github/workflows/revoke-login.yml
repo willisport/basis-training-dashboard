@@ -1,0 +1,34 @@
+name: Login entfernen
+
+on:
+  workflow_dispatch:
+    inputs:
+      username:
+        description: "Zu entfernender Benutzername"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  revoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Nutzer entfernen
+        working-directory: sync
+        env:
+          REVOKE_USERNAME: ${{ github.event.inputs.username }}
+        run: python revoke_login.py
+
+      - name: Aenderung committen und pushen
+        run: |
+          git config user.name "basis-sync-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/auth-config.json
+          git diff --staged --quiet && echo "Keine Aenderung" || (git commit -m "Login entfernt: ${{ github.event.inputs.username }}" && git push)

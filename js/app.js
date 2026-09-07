@@ -1298,7 +1298,10 @@ function renderLogins() {
   if (!panel) return;
   if (typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE !== "owner") { panel.innerHTML = ""; return; }
 
-  const approvedUsers = Object.keys((typeof CURRENT_AUTH_CONFIG !== "undefined" && CURRENT_AUTH_CONFIG && CURRENT_AUTH_CONFIG.users) || {});
+  const usersMap = (typeof CURRENT_AUTH_CONFIG !== "undefined" && CURRENT_AUTH_CONFIG && CURRENT_AUTH_CONFIG.users) || {};
+  const approvedUsers = Object.keys(usersMap)
+    .map(u => ({ username: u, role: usersMap[u].role || "viewer" }))
+    .sort((a, b) => (a.role === "owner" ? -1 : 0) - (b.role === "owner" ? -1 : 0));
 
   panel.innerHTML = `
     <div class="page-head">
@@ -1333,7 +1336,13 @@ function renderLogins() {
       <div class="card">
         <div class="card-head"><span class="card-title">Freigeschaltete Logins</span></div>
         ${approvedUsers.length
-          ? `<div class="stack" style="gap:6px;">${approvedUsers.map(u => `<div class="day-mini-unit"><span style="flex:1;">${escapeHtml(u)}</span><span class="tag ergaenzung">viewer</span></div>`).join("")}</div>`
+          ? `<div class="stack" style="gap:6px;">${approvedUsers.map(u => `
+              <div class="day-mini-unit">
+                <span style="flex:1;">${escapeHtml(u.username)}</span>
+                <span class="tag ${u.role === "owner" ? "pflicht" : "ergaenzung"}">${u.role === "owner" ? "Owner" : "viewer"}</span>
+                <button class="btn-small revoke-user-btn" type="button" data-username="${escapeHtml(u.username)}" style="padding:4px 10px; font-size:11px; margin-left:8px;">Entfernen</button>
+              </div>`).join("")}
+             <div class="card-note revoke-status" style="margin-top:4px;"></div>`
           : `<div class="card-note">Noch niemand freigeschaltet.</div>`}
       </div>
     </div>`;
@@ -1360,8 +1369,53 @@ function renderLogins() {
     approveLoginRequest(Number(btn.dataset.issueNumber), statusEl, btn);
   });
 
+  const revokeStatusEl = panel.querySelector(".revoke-status");
+  panel.querySelectorAll(".revoke-user-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const username = btn.dataset.username;
+      if (!window.confirm(`"${username}" wirklich entfernen? Kann sich danach nicht mehr einloggen.`)) return;
+      revokeUser(username, revokeStatusEl, btn);
+    });
+  });
+
   if (LOGIN_REQUESTS_CACHE) renderLoginRequestsList(LOGIN_REQUESTS_CACHE);
   else loadAndRender();
+}
+
+async function revokeUser(username, statusEl, btn) {
+  const adminKey = getAdminKey();
+  if (!adminKey) {
+    if (statusEl) { statusEl.style.color = "var(--amber, orange)"; statusEl.textContent = "Erst oben den Freischalt-Code eingeben und speichern."; }
+    return;
+  }
+  btn.disabled = true;
+  if (statusEl) { statusEl.style.color = ""; statusEl.textContent = `Entferne "${username}"…`; }
+  try {
+    const res = await fetch(HOSTED_SYNC_WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "revoke-login", username, adminKey }),
+    });
+    const result = await res.json();
+    if (!result.ok) throw new Error(result.error || "Unbekannter Fehler");
+    if (statusEl) { statusEl.style.color = "var(--teal)"; statusEl.textContent = `"${username}" wird entfernt, dauert ca. 30 Sek…`; }
+    for (let i = 0; i < 12; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      try {
+        const config = await fetch("data/auth-config.json", { cache: "no-store" }).then(r => r.json());
+        if (!config.users || !config.users[username]) {
+          CURRENT_AUTH_CONFIG = config;
+          if (statusEl) statusEl.textContent = `"${username}" entfernt.`;
+          renderLogins();
+          return;
+        }
+      } catch { /* naechster Versuch */ }
+    }
+    if (statusEl) statusEl.textContent = `Dauert länger als erwartet – Seite in Kürze neu laden.`;
+  } catch (err) {
+    if (statusEl) { statusEl.style.color = "var(--amber, orange)"; statusEl.textContent = `Fehler: ${err.message || err}`; }
+    btn.disabled = false;
+  }
 }
 
 /* ---------- boot ---------- */
