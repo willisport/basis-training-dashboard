@@ -2,6 +2,7 @@
    Lokal ohne data/auth-config.json bleibt alles wie bisher, ohne Login. */
 
 const AUTH_SESSION_KEY = "basisAuthSession_v1";
+const GITHUB_REPO = "willisport/willisport.github.io";
 
 let CURRENT_ROLE = "owner";
 let IS_HOSTED = false;
@@ -137,6 +138,15 @@ function setupLogoutControl() {
   });
 }
 
+function setupHostedSyncButton() {
+  const btn = document.getElementById("hosted-sync-btn");
+  if (!btn || CURRENT_ROLE !== "owner") return;
+  btn.hidden = false;
+  btn.addEventListener("click", () => {
+    window.open(`https://github.com/${GITHUB_REPO}/actions/workflows/sync.yml`, "_blank");
+  });
+}
+
 /**
  * Boot-Einstiegspunkt: prueft, ob eine verschluesselte gehostete Version
  * vorliegt (data/auth-config.json vorhanden). Falls nein: normales lokales
@@ -175,6 +185,7 @@ async function bootWithAuth(onData) {
       const data = await decryptDataFile(dekRawBytes, encFile);
       onData(data);
       setupLogoutControl();
+      setupHostedSyncButton();
       showSyncStatus(data.syncedAt);
     } catch (err) {
       document.getElementById("tab-heute").innerHTML =

@@ -1082,6 +1082,103 @@ function renderKraft(data) {
     </div>`;
 }
 
+/* ---------- render: Planänderungen / Anfragen (ueber GitHub Issues) ---------- */
+
+let PLAN_REQUESTS_CACHE = null;
+
+async function fetchPlanRequests() {
+  const repo = typeof GITHUB_REPO !== "undefined" ? GITHUB_REPO : null;
+  if (!repo) return { error: "Kein Repository konfiguriert (nur in der Online-Version verfügbar)." };
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/issues?labels=anfrage&state=all&per_page=20`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) throw new Error(`GitHub antwortete mit ${res.status}`);
+    return { items: await res.json() };
+  } catch (err) {
+    return { error: String(err.message || err) };
+  }
+}
+
+function requestItemHtml(issue) {
+  const isOpen = issue.state === "open";
+  return `
+    <div class="qa-item">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span class="qa-question">${escapeHtml(issue.title)}</span>
+        <span class="tag ${isOpen ? "ergaenzung" : "pflicht"}">${isOpen ? "offen" : "erledigt"}</span>
+      </div>
+      ${issue.body ? `<div class="qa-answer" style="margin-top:4px;">${escapeHtml(issue.body.slice(0, 300))}</div>` : ""}
+      <div class="card-note" style="margin-top:6px;">
+        ${new Date(issue.created_at).toLocaleDateString("de-DE")} von ${escapeHtml(issue.user?.login || "?")}
+        · <a href="${issue.html_url}" target="_blank" rel="noopener">auf GitHub ansehen/beantworten</a>
+      </div>
+    </div>`;
+}
+
+function renderRequestsList(result) {
+  const list = document.getElementById("requests-list");
+  if (!list) return;
+  if (result.error) {
+    list.innerHTML = `<div class="card-note">Konnte Anfragen nicht laden: ${escapeHtml(result.error)}</div>`;
+    return;
+  }
+  if (!result.items.length) {
+    list.innerHTML = `<div class="card-note">Noch keine Anfragen.</div>`;
+    return;
+  }
+  list.innerHTML = result.items.map(requestItemHtml).join("");
+}
+
+function renderPlanaenderungen() {
+  const panel = document.getElementById("tab-planaenderungen");
+  if (!panel) return;
+  const repoConfigured = typeof GITHUB_REPO !== "undefined";
+
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Anfragen</div>
+      <div class="page-title">Planänderungen &amp; Anfragen</div>
+      <div class="page-sub">Für Trainingspartner: hier eine Nachricht hinterlassen (z. B. Terminwunsch) – wird als GitHub-Issue abgelegt, sichtbar für alle mit Zugriff auf diese Seite</div>
+    </div>
+
+    <div class="stack">
+      ${repoConfigured ? `
+      <div class="card">
+        <div class="card-head"><span class="card-title">Neue Anfrage</span><span class="card-note">Öffnet GitHub zum Absenden (kostenloser Account nötig)</span></div>
+        <textarea id="request-text" class="note-box" placeholder="z. B. „Ich würde gerne Donnerstag um 12 Uhr mit Willi laufen“"></textarea>
+        <button id="request-send-btn" class="btn-small" type="button" style="margin-top:10px;">Anfrage senden</button>
+      </div>` : `
+      <div class="card"><div class="card-note">Anfragen funktionieren nur in der online gehosteten Version.</div></div>`}
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Bisherige Anfragen</span><span class="card-note"><span id="requests-refresh" style="cursor:pointer; text-decoration:underline;">aktualisieren</span></span></div>
+        <div id="requests-list" class="stack" style="gap:8px;"><div class="card-note">Lade…</div></div>
+      </div>
+    </div>`;
+
+  const sendBtn = document.getElementById("request-send-btn");
+  if (sendBtn) {
+    sendBtn.addEventListener("click", () => {
+      const text = document.getElementById("request-text").value.trim();
+      if (!text) return;
+      const title = text.length > 60 ? text.slice(0, 57) + "…" : text;
+      const url = `https://github.com/${GITHUB_REPO}/issues/new?` + new URLSearchParams({ title, body: text, labels: "anfrage" }).toString();
+      window.open(url, "_blank");
+    });
+  }
+
+  const refreshEl = document.getElementById("requests-refresh");
+  const loadAndRender = () => fetchPlanRequests().then(result => { PLAN_REQUESTS_CACHE = result; renderRequestsList(result); });
+  if (refreshEl) refreshEl.addEventListener("click", loadAndRender);
+
+  if (PLAN_REQUESTS_CACHE) {
+    renderRequestsList(PLAN_REQUESTS_CACHE);
+  } else if (repoConfigured) {
+    loadAndRender();
+  }
+}
+
 /* ---------- boot ---------- */
 
 let PRISTINE_DATA = null;
@@ -1099,6 +1196,7 @@ function renderAll(freshData) {
   renderPerformance(data);
   renderCoach(data);
   renderKraft(data);
+  renderPlanaenderungen(data);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
