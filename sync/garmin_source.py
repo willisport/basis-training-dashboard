@@ -74,7 +74,7 @@ def fetch_daily_metrics(api: Garmin, day: datetime) -> dict:
     date_str = day.strftime("%Y-%m-%d")
     out = {
         "totalMin": None, "deepMin": None, "lightMin": None, "remMin": None, "awakeMin": None,
-        "restingHr": None, "hrv": None, "sleepScore": None, "bodyBattery": None,
+        "restingHr": None, "hrv": None, "sleepScore": None, "bodyBattery": None, "stress": None,
     }
 
     try:
@@ -115,7 +115,51 @@ def fetch_daily_metrics(api: Garmin, day: datetime) -> dict:
     except Exception as e:
         print(f"  [warn] HRV fuer {date_str} nicht verfuegbar: {e}")
 
+    try:
+        stress = api.get_all_day_stress(date_str)
+        out["stress"] = stress.get("avgStressLevel") if stress else None
+        if out["stress"] is not None and out["stress"] < 0:
+            out["stress"] = None  # Garmin nutzt -1/-2 fuer "keine Daten"
+    except Exception as e:
+        print(f"  [warn] Stresslevel fuer {date_str} nicht verfuegbar: {e}")
+
     return out
+
+
+def fetch_recovery_trend(api: Garmin, end: datetime, days: int = 5) -> list:
+    """Schlaf-Score, Ruhepuls, HRV-Status der letzten Tage - fuer die
+    Ueberlastungs-Erkennung (mehrere schlechte Tage in Folge)."""
+    start = end - timedelta(days=days - 1)
+    try:
+        rows = api.get_sleep_daily(start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
+    except Exception as e:
+        print(f"  [warn] Erholungsverlauf nicht verfuegbar: {e}")
+        return []
+    out = []
+    for row in rows or []:
+        vals = row.get("values") or {}
+        out.append({
+            "date": row.get("calendarDate"),
+            "sleepScore": vals.get("sleepScore"),
+            "restingHr": vals.get("restingHeartRate"),
+            "hrvStatus": vals.get("hrvStatus"),
+        })
+    return sorted(out, key=lambda r: r["date"] or "")
+
+
+def fetch_race_predictions(api: Garmin) -> dict:
+    """Garmins geschaetzte Wettkampfzeiten (Sekunden) anhand aktueller Fitness."""
+    try:
+        r = api.get_race_predictions()
+        return {
+            "time5kSec": r.get("time5K"),
+            "time10kSec": r.get("time10K"),
+            "timeHalfMarathonSec": r.get("timeHalfMarathon"),
+            "timeMarathonSec": r.get("timeMarathon"),
+        }
+    except Exception as e:
+        print(f"  [warn] Rennprognose nicht verfuegbar: {e}")
+        return {}
 
 
 def fetch_steps_history(api: Garmin, start: datetime, end: datetime) -> dict:

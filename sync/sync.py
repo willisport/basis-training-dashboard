@@ -165,6 +165,38 @@ def value_on_or_before(series: list, date_str: str, fallback=None):
     return candidates[-1]["value"] if candidates else fallback
 
 
+def detect_overload(trend: list):
+    """Einfache Regel-Erkennung: schlaegt an, wenn mindestens zwei von drei
+    Warnsignalen (schlechter Schlaf, unausgeglichenes HRV, erhoehter
+    Ruhepuls) an mehreren der letzten Tage gleichzeitig auftreten - soll
+    bewusst nicht bei jeder einzelnen schlechten Nacht schon anschlagen."""
+    recent = [r for r in trend[-3:] if r]
+    if len(recent) < 2:
+        return None
+
+    poor_sleep_days = sum(1 for r in recent if r.get("sleepScore") is not None and r["sleepScore"] < 55)
+    unbalanced_hrv_days = sum(1 for r in recent if r.get("hrvStatus") in ("UNBALANCED", "LOW"))
+
+    rhr_values = [r["restingHr"] for r in trend if r.get("restingHr") is not None]
+    rhr_elevated = False
+    if len(rhr_values) >= 4:
+        baseline = sum(rhr_values[:-2]) / len(rhr_values[:-2])
+        recent_avg = sum(rhr_values[-2:]) / 2
+        rhr_elevated = recent_avg > baseline + 3
+
+    reasons = []
+    if poor_sleep_days >= 2:
+        reasons.append(f"Schlaf-Score an {poor_sleep_days} der letzten {len(recent)} Tage niedrig")
+    if unbalanced_hrv_days >= 2:
+        reasons.append("HRV mehrere Tage unausgeglichen")
+    if rhr_elevated:
+        reasons.append("Ruhepuls zuletzt erhoeht")
+
+    if len(reasons) >= 2:
+        return {"reasons": reasons}
+    return None
+
+
 def weight_avg_in_week(weights: list, monday_str: str, sunday_str: str, fallback=None):
     vals = [w["weightKg"] for w in weights if monday_str <= w["date"] <= sunday_str]
     return round(sum(vals) / len(vals), 1) if vals else fallback
@@ -188,6 +220,8 @@ def main():
         vo2max_history = garmin_source.fetch_vo2max_history(api, today, days=WINDOW_WEEKS * 7 + 60)
         vo2max = vo2max_history[-1]["value"] if vo2max_history else None
         steps_history = garmin_source.fetch_steps_history(api, window_start, today)
+        recovery_trend = garmin_source.fetch_recovery_trend(api, today)
+        race_predictions = garmin_source.fetch_race_predictions(api)
         print(f"  Garmin: {len(activities)} Aktivitaeten geladen")
     except Exception as e:
         print(f"[FEHLER] Garmin-Sync fehlgeschlagen, breche ab: {e}")
@@ -259,6 +293,7 @@ def main():
         },
         "steps": week_days[today_idx].get("steps"),
         "stepGoal": week_days[today_idx].get("stepGoal"),
+        "overloadWarning": detect_overload(recovery_trend),
     }
 
     # --- Verlauf: Wochen-/Monatsvergleich + Log ---
@@ -349,7 +384,10 @@ def main():
         if a["type"] == "rad" and a.get("avgSpeedKmh") and (a["startTime"] or "")[:10] >= iso_date(window_start)
     ]
 
-    performance = {"weeks": perf_weeks, "runPace": run_pace_points, "bikeSpeed": bike_speed_points}
+    performance = {
+        "weeks": perf_weeks, "runPace": run_pace_points, "bikeSpeed": bike_speed_points,
+        "racePredictions": race_predictions,
+    }
 
     output = {
         "syncedAt": datetime.now(timezone.utc).isoformat(timespec="minutes"),

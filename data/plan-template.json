@@ -4,7 +4,7 @@
     "thresholdPaceMinKm": "4:31",
     "thresholdHr": 175,
     "zone2HrLow": 130,
-    "zone2HrHigh": 135,
+    "zone2HrHigh": 140,
     "zone2PaceFastMinKm": "6:00",
     "zone2PaceSlowMinKm": "6:10",
     "bikeAvgSpeedLowKmh": 25,
@@ -51,7 +51,7 @@
       "weekday": "Mittwoch",
       "focus": "Langer Lauf – Fokustag",
       "units": [
-        { "name": "Langer Lauf", "type": "lauf", "tag": "pflicht", "detail": "15 km · Zone 2 (130–135 bpm, 6:00–6:10 min/km)", "plannedDurationMin": 90, "keySession": true, "matchHint": { "activityTypes": ["running"], "minDistanceKm": 12 } },
+        { "name": "Langer Lauf", "type": "lauf", "tag": "pflicht", "detail": "15 km · Zone 2 (130–140 bpm)", "plannedDurationMin": 90, "keySession": true, "matchHint": { "activityTypes": ["running"], "minDistanceKm": 12 } },
         { "name": "Bein-Stabi", "type": "kraft", "tag": "ergaenzung", "detail": "Einbeinstand, Copenhagen Plank, Ausfallschritte, seitliches Beinheben · 3×10–12 Wdh. pro Seite, direkt im Anschluss", "plannedDurationMin": 20, "exercises": [
           { "name": "Einbeinstand", "sets": 3, "reps": "30–45 s", "rest": "30 s" },
           { "name": "Copenhagen Plank", "sets": 3, "reps": "20–30 s pro Seite", "rest": "30 s" },

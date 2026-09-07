@@ -32,6 +32,11 @@ function fmtPace(secPerKm) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function fmtDuration(totalSec) {
+  if (totalSec === null || totalSec === undefined || Number.isNaN(totalSec)) return "–";
+  const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = Math.round(totalSec % 60);
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+}
 function fmtVal(v, unit = "") { return (v === null || v === undefined || Number.isNaN(v)) ? "–" : `${v}${unit}`; }
 function escapeHtml(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -548,6 +553,13 @@ function renderHeute(data) {
     </div>
 
     <div class="stack">
+      ${t.overloadWarning ? `
+      <div class="card accent-amber">
+        <div class="card-head"><span class="card-title">⚠ Überlastungs-Hinweis</span></div>
+        <div class="card-note">${t.overloadWarning.reasons.map(escapeHtml).join(" · ")}</div>
+        <div class="card-note" style="margin-top:6px;">Mehrere Warnsignale gleichzeitig – heute eher lockerer angehen oder einen Ruhetag einschieben.</div>
+      </div>` : ""}
+
       <div class="card accent-teal">
         <div class="card-head"><span class="card-title">Heutige Einheiten</span><span class="card-note">Kreis: geplant → erledigt → abgelehnt · Dropdown: Tag wählen · 🪄: automatisch sinnvoll verschieben</span></div>
         <div class="unit-list">${unitsHtml}</div>
@@ -563,6 +575,7 @@ function renderHeute(data) {
               <div class="stat"><span class="stat-value">${fmtVal(t.sleep.hrv)}<span class="unit">ms</span></span><span class="stat-label">HRV</span></div>
               <div class="stat"><span class="stat-value">${fmtVal(t.sleep.bodyBattery)}</span><span class="stat-label">Body Battery</span></div>
               <div class="stat"><span class="stat-value">${fmtVal(t.sleep.sleepScore)}</span><span class="stat-label">Schlaf-Score</span></div>
+              <div class="stat"><span class="stat-value">${fmtVal(t.sleep.stress)}</span><span class="stat-label">Stresslevel</span></div>
             </div>
           </div>
         </div>
@@ -854,6 +867,17 @@ function renderPerformance(data) {
           ${lineChartSVG(bikeSpeedPoints)}
         </div>
       </div>
+
+      ${data.performance.racePredictions && Object.keys(data.performance.racePredictions).length ? `
+      <div class="card">
+        <div class="card-head"><span class="card-title">Geschätzte Wettkampfzeit</span><span class="card-note">Von Garmin anhand deiner aktuellen Fitness geschätzt, kein echtes Rennen nötig</span></div>
+        <div class="stat-row">
+          <div class="stat"><span class="stat-value">${fmtDuration(data.performance.racePredictions.time5kSec)}</span><span class="stat-label">5 km</span></div>
+          <div class="stat"><span class="stat-value">${fmtDuration(data.performance.racePredictions.time10kSec)}</span><span class="stat-label">10 km</span></div>
+          <div class="stat"><span class="stat-value">${fmtDuration(data.performance.racePredictions.timeHalfMarathonSec)}</span><span class="stat-label">Halbmarathon</span></div>
+          <div class="stat"><span class="stat-value">${fmtDuration(data.performance.racePredictions.timeMarathonSec)}</span><span class="stat-label">Marathon</span></div>
+        </div>
+      </div>` : ""}
     </div>`;
 }
 
