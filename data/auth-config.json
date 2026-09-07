@@ -24,7 +24,8 @@
       "salt": "QLRymIKF8pNJy3BFcFDsXg==",
       "iv": "eISvrzi5WvY+6cPi",
       "wrappedKey": "9R2AGJxZnnQpp4P8+1UdyQjG0MAaFvcKfvwwu9bXJXIU1+wIALkW1DI1Csb7W1J8",
-      "role": "viewer"
+      "role": "viewer",
+      "sessionVersion": 1
     },
     "test": {
       "salt": "73EwBYO+S71bwNa0oDXVBQ==",
