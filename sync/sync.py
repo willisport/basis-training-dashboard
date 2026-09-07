@@ -13,7 +13,7 @@ beibehalten.
 import json
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -338,7 +338,7 @@ def main():
     performance = {"weeks": perf_weeks, "runPace": run_pace_points, "bikeSpeed": bike_speed_points}
 
     output = {
-        "syncedAt": datetime.now().isoformat(timespec="minutes"),
+        "syncedAt": datetime.now(timezone.utc).isoformat(timespec="minutes"),
         "profile": {**plan["profile"], "vo2max": today_obj["body"]["vo2max"]},
         "today": today_obj,
         "week": week,
