@@ -28,7 +28,7 @@
       "weekday": "Montag",
       "focus": "Zone-2-Lauf + schweres Beintraining",
       "units": [
-        { "name": "Zone-2-Lauf", "type": "lauf", "tag": "pflicht", "detail": "6–8 km · 130–135 bpm · 6:00–6:10 min/km", "plannedDurationMin": 45, "matchHint": { "activityTypes": ["running"] } },
+        { "name": "Zone-2-Lauf", "type": "lauf", "tag": "pflicht", "detail": "6–8 km · 130–140 bpm", "matchHint": { "activityTypes": ["running"] } },
         { "name": "Schweres Beintraining", "type": "kraft", "tag": "pflicht", "detail": "Kniebeuge, Kreuzheben, Adduktoren (Innen-/Außenseite) · 3×6–8 Wdh., 2–3 Wdh. im Tank, 3–4 min Pause", "plannedDurationMin": 60, "exercises": [
           { "name": "Kniebeuge", "sets": 3, "reps": "6–8", "rest": "3–4 min" },
           { "name": "Kreuzheben", "sets": 3, "reps": "6–8", "rest": "3–4 min" },

@@ -20,15 +20,22 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Sitzung invalidieren
-        working-directory: sync
+      - name: Sitzung invalidieren und pushen (mit Retry bei Konflikt)
         env:
           LOGOUT_USERNAME: ${{ github.event.inputs.username }}
-        run: python bump_session.py
-
-      - name: Aenderung committen und pushen
         run: |
           git config user.name "basis-sync-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/auth-config.json
-          git diff --staged --quiet && echo "Keine Aenderung" || (git commit -m "Login abgemeldet: ${{ github.event.inputs.username }}" && git push)
+          for i in 1 2 3 4 5; do
+            (cd sync && python bump_session.py)
+            git add data/auth-config.json
+            if git diff --staged --quiet; then echo "Keine Aenderung noetig"; exit 0; fi
+            git commit -m "Login abgemeldet: ${{ github.event.inputs.username }}"
+            if git push; then exit 0; fi
+            echo "Push fehlgeschlagen, hole neuesten Stand und versuche erneut..."
+            git reset --hard HEAD~1
+            git fetch origin main
+            git reset --hard origin/main
+          done
+          echo "Konnte nach mehreren Versuchen nicht pushen." >&2
+          exit 1

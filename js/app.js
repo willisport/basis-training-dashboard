@@ -36,6 +36,13 @@ function fmtVal(v, unit = "") { return (v === null || v === undefined || Number.
 function escapeHtml(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
+function canEdit() {
+  return typeof CURRENT_ROLE === "undefined" || CURRENT_ROLE !== "viewer";
+}
+function statusDotHtml(dateStr, u) {
+  if (!canEdit()) return `<span class="status-dot ${u.status}"></span>`;
+  return `<span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>`;
+}
 
 function computeRecoveryScore(sleep) {
   const parts = [];
@@ -127,6 +134,7 @@ function applyMoves(data) {
 }
 
 function moveSelectHtml(u, currentDate, weekDays, weekStart) {
+  if (!canEdit()) return "";
   const options = weekDays.map(d =>
     `<option value="${d.date}" ${d.date === currentDate ? "selected" : ""}>${WEEKDAYS_SHORT[d.weekday]}</option>`
   ).join("");
@@ -134,6 +142,7 @@ function moveSelectHtml(u, currentDate, weekDays, weekStart) {
 }
 
 function autoMoveButtonHtml(u) {
+  if (!canEdit()) return "";
   return `<button class="btn-small auto-move-btn" type="button" style="padding:6px 9px; font-size:12px;"
     data-auto-weekday="${u.homeWeekday}" data-auto-unit="${escapeHtml(u.name)}"
     title="Automatisch auf einen sinnvollen Tag verschieben – oder streichen, falls keiner passt">🪄</button>`;
@@ -341,7 +350,7 @@ function unitRowHtml(u, dateStr, weekDays, weekStart) {
     : "";
   return `
     <div class="day-mini-unit">
-      <span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+      ${statusDotHtml(dateStr, u)}
       <span style="flex:1;">
         ${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}${u.planLabel ? ` <span class="unit-key-badge" style="color:var(--sky-400);">${escapeHtml(u.planLabel)}</span>` : ""}
         ${u.detail ? `<div class="unit-detail" style="margin-top:2px;">${escapeHtml(u.detail)}${u.plannedDurationMin ? ` · ~${u.plannedDurationMin} min` : ""}</div>` : ""}
@@ -484,7 +493,7 @@ function renderHeute(data) {
 
   const unitsHtml = t.units.map(u => `
     <div class="unit">
-      <span class="status-dot ${u.status} clickable" data-toggle-date="${t.date}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+      ${statusDotHtml(t.date, u)}
       <div>
         <div class="unit-name">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}${u.planLabel ? ` <span class="unit-key-badge" style="color:var(--sky-400);">${escapeHtml(u.planLabel)}</span>` : ""}</div>
         <div class="unit-detail">${escapeHtml(u.detail)}${u.plannedDurationMin ? ` · ~${u.plannedDurationMin} min` : ""}</div>
@@ -562,8 +571,8 @@ function renderHeute(data) {
       <div class="card">
         <div class="card-head"><span class="card-title">Tagesnotiz</span><span class="card-note">fließt in die Coach-Einschätzung ein · <span id="note-saved-hint" class="note-saved-hint">gespeichert</span></span></div>
         <div style="display:flex; gap:8px; align-items:flex-start;">
-          <textarea id="daily-note" class="note-box" ${typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE === "viewer" ? "readonly" : ""} placeholder="Wie fühlst du dich heute? z. B. Beine schwer, gut geschlafen, motiviert…">${escapeHtml(t.note || "")}</textarea>
-          <button id="note-mic-btn" class="btn-small" type="button" title="Notiz per Sprache diktieren">🎤</button>
+          <textarea id="daily-note" class="note-box" ${canEdit() ? "" : "readonly"} placeholder="Wie fühlst du dich heute? z. B. Beine schwer, gut geschlafen, motiviert…">${escapeHtml(t.note || "")}</textarea>
+          ${canEdit() ? `<button id="note-mic-btn" class="btn-small" type="button" title="Notiz per Sprache diktieren">🎤</button>` : ""}
         </div>
       </div>
 
@@ -872,6 +881,7 @@ function renderCoach(data) {
         </div>
       </div>
 
+      ${canEdit() ? `
       <div class="card">
         <div class="card-head"><span class="card-title">Frag den Coach</span><span class="card-note">Regelbasiert aus deinen Daten – kein echtes KI-Gespräch</span></div>
         <div style="display:flex; gap:8px;">
@@ -880,7 +890,7 @@ function renderCoach(data) {
           <button id="coach-ask-btn" class="btn-small" type="button">Fragen</button>
         </div>
         <div id="coach-qa-log" class="stack" style="margin-top:12px; gap:8px;"></div>
-      </div>
+      </div>` : ""}
     </div>`;
 
   setupCoachQA(data);
@@ -991,7 +1001,7 @@ function strengthUnitRow(u, dateStr) {
   return `
     <div class="exercise-row">
       <div style="display:flex; align-items:center; gap:10px; min-width:0;">
-        <span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+        ${statusDotHtml(dateStr, u)}
         <span class="exercise-name">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}${u.planLabel ? ` <span class="unit-key-badge" style="color:var(--sky-400);">${escapeHtml(u.planLabel)}</span>` : ""}</span>
       </div>
       <span class="exercise-spec">${escapeHtml(u.detail)}${u.plannedDurationMin ? ` · ~${u.plannedDurationMin} min` : ""}</span>
@@ -1004,7 +1014,7 @@ function strengthUnitBlock(u, dateStr) {
       <div class="card accent-teal">
         <div class="card-head">
           <span class="card-title" style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:15px;">
-            <span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+            ${statusDotHtml(dateStr, u)}
             ${escapeHtml(u.name)}
           </span>
           <span class="card-note">${u.plannedDurationMin ? `~${u.plannedDurationMin} min` : ""}</span>
@@ -1112,23 +1122,41 @@ async function fetchPlanRequests() {
   }
 }
 
-function requestItemHtml(issue) {
+async function fetchIssueComments(issueNumber) {
+  const repo = typeof GITHUB_REPO !== "undefined" ? GITHUB_REPO : null;
+  if (!repo) return [];
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}/comments`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch { return []; }
+}
+
+function requestItemHtml(issue, comments) {
   const isOpen = issue.state === "open";
+  const commentsHtml = (comments || []).map(c => `
+    <div class="qa-answer" style="margin-top:4px; padding-left:10px; border-left:2px solid var(--ocean-600);">${escapeHtml(c.body)}</div>`).join("");
   return `
-    <div class="qa-item">
+    <div class="qa-item" data-issue-number="${issue.number}">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <span class="qa-question">${escapeHtml(issue.title)}</span>
         <span class="tag ${isOpen ? "ergaenzung" : "pflicht"}">${isOpen ? "offen" : "erledigt"}</span>
       </div>
       ${issue.body ? `<div class="qa-answer" style="margin-top:4px;">${escapeHtml(issue.body.slice(0, 300))}</div>` : ""}
-      <div class="card-note" style="margin-top:6px;">
-        ${new Date(issue.created_at).toLocaleDateString("de-DE")} von ${escapeHtml(issue.user?.login || "?")}
-        · <a href="${issue.html_url}" target="_blank" rel="noopener">auf GitHub ansehen/beantworten</a>
-      </div>
+      ${commentsHtml}
+      <div class="card-note" style="margin-top:6px;">${new Date(issue.created_at).toLocaleDateString("de-DE")}</div>
+      ${(canEdit() && isOpen) ? `
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="text" class="text-input reply-request-input" placeholder="Antwort schreiben…" style="flex:1;" />
+          <button class="btn-small reply-request-btn" type="button" data-issue-number="${issue.number}">Antworten &amp; schließen</button>
+        </div>
+        <div class="card-note reply-request-status" style="margin-top:4px;"></div>` : ""}
     </div>`;
 }
 
-function renderRequestsList(result) {
+async function renderRequestsList(result) {
   const list = document.getElementById("requests-list");
   if (!list) return;
   if (result.error) {
@@ -1139,7 +1167,48 @@ function renderRequestsList(result) {
     list.innerHTML = `<div class="card-note">Noch keine Anfragen.</div>`;
     return;
   }
-  list.innerHTML = result.items.map(requestItemHtml).join("");
+  list.innerHTML = `<div class="card-note">Lade…</div>`;
+  const allComments = await Promise.all(result.items.map(issue => fetchIssueComments(issue.number)));
+  list.innerHTML = result.items.map((issue, i) => requestItemHtml(issue, allComments[i])).join("");
+
+  list.querySelectorAll(".reply-request-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const item = btn.closest("[data-issue-number]");
+      const input = item.querySelector(".reply-request-input");
+      const statusEl = item.querySelector(".reply-request-status");
+      const replyText = input.value.trim();
+      if (!replyText) return;
+      replyToRequest(Number(btn.dataset.issueNumber), replyText, statusEl, btn);
+    });
+  });
+}
+
+async function replyToRequest(issueNumber, replyText, statusEl, btn) {
+  const adminKey = getAdminKey();
+  if (!adminKey) {
+    statusEl.style.color = "var(--amber, orange)";
+    statusEl.textContent = 'Erst im "Logins"-Tab den Freischalt-Code eingeben und speichern.';
+    return;
+  }
+  btn.disabled = true;
+  statusEl.style.color = "";
+  statusEl.textContent = "Sende Antwort…";
+  try {
+    const res = await fetch(HOSTED_SYNC_WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reply-request", issueNumber, replyText, adminKey }),
+    });
+    const result = await res.json();
+    if (!result.ok) throw new Error(result.error || "Unbekannter Fehler");
+    statusEl.style.color = "var(--teal)";
+    statusEl.textContent = "Beantwortet und geschlossen.";
+    setTimeout(() => { PLAN_REQUESTS_CACHE = null; renderPlanaenderungen(); }, 1500);
+  } catch (err) {
+    statusEl.style.color = "var(--amber, orange)";
+    statusEl.textContent = `Fehler: ${err.message || err}`;
+    btn.disabled = false;
+  }
 }
 
 function renderPlanaenderungen() {
@@ -1151,15 +1220,16 @@ function renderPlanaenderungen() {
     <div class="page-head">
       <div class="page-eyebrow">Anfragen</div>
       <div class="page-title">Planänderungen &amp; Anfragen</div>
-      <div class="page-sub">Für Trainingspartner: hier eine Nachricht hinterlassen (z. B. Terminwunsch) – wird als GitHub-Issue abgelegt, sichtbar für alle mit Zugriff auf diese Seite</div>
+      <div class="page-sub">Für Trainingspartner: hier eine Nachricht hinterlassen (z. B. Terminwunsch)</div>
     </div>
 
     <div class="stack">
       ${repoConfigured ? `
       <div class="card">
-        <div class="card-head"><span class="card-title">Neue Anfrage</span><span class="card-note">Öffnet GitHub zum Absenden (kostenloser Account nötig)</span></div>
+        <div class="card-head"><span class="card-title">Neue Anfrage</span></div>
         <textarea id="request-text" class="note-box" placeholder="z. B. „Ich würde gerne Donnerstag um 12 Uhr mit Willi laufen“"></textarea>
         <button id="request-send-btn" class="btn-small" type="button" style="margin-top:10px;">Anfrage senden</button>
+        <div class="card-note request-send-status" style="margin-top:6px;"></div>
       </div>` : `
       <div class="card"><div class="card-note">Anfragen funktionieren nur in der online gehosteten Version.</div></div>`}
 
@@ -1170,13 +1240,35 @@ function renderPlanaenderungen() {
     </div>`;
 
   const sendBtn = document.getElementById("request-send-btn");
+  const sendStatus = panel.querySelector(".request-send-status");
   if (sendBtn) {
-    sendBtn.addEventListener("click", () => {
-      const text = document.getElementById("request-text").value.trim();
+    sendBtn.addEventListener("click", async () => {
+      const textEl = document.getElementById("request-text");
+      const text = textEl.value.trim();
       if (!text) return;
-      const title = text.length > 60 ? text.slice(0, 57) + "…" : text;
-      const url = `https://github.com/${GITHUB_REPO}/issues/new?` + new URLSearchParams({ title, body: text, labels: "anfrage" }).toString();
-      window.open(url, "_blank");
+      sendBtn.disabled = true;
+      sendStatus.style.color = "";
+      sendStatus.textContent = "Sende…";
+      try {
+        const title = text.length > 60 ? text.slice(0, 57) + "…" : text;
+        const res = await fetch(HOSTED_SYNC_WORKER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "create-request", title, body: text }),
+        });
+        const result = await res.json();
+        if (!result.ok) throw new Error(result.error || "Unbekannter Fehler");
+        textEl.value = "";
+        sendStatus.style.color = "var(--teal)";
+        sendStatus.textContent = "Anfrage gesendet.";
+        PLAN_REQUESTS_CACHE = null;
+        loadAndRender();
+      } catch (err) {
+        sendStatus.style.color = "var(--amber, orange)";
+        sendStatus.textContent = `Fehler: ${err.message || err}`;
+      } finally {
+        sendBtn.disabled = false;
+      }
     });
   }
 

@@ -275,8 +275,7 @@ async function pollForFreshSync(prevSyncedAt, maxWaitMs = 120000, intervalMs = 8
 }
 
 function setupLoginsNavItem() {
-  if (CURRENT_ROLE !== "owner") return;
-  document.querySelectorAll('[data-tab="logins"]').forEach(el => { el.hidden = false; });
+  document.querySelectorAll('[data-tab="logins"]').forEach(el => { el.hidden = CURRENT_ROLE !== "owner"; });
 }
 
 /**
