@@ -80,9 +80,8 @@ function clearSession() {
 function showSignupForm(overlay) {
   const card = overlay.querySelector(".login-card");
   card.innerHTML = `
-    <div class="login-brand">B</div>
     <div class="login-title">Login erstellen</div>
-    <div class="login-sub">Wird als Anfrage an den Owner geschickt (GitHub-Account nötig zum Absenden). Dein Passwort verlässt nie diesen Browser im Klartext.</div>
+    <div class="login-sub">Wird als Anfrage an den Owner geschickt. Dein Passwort verlässt nie diesen Browser im Klartext.</div>
     <input type="text" id="signup-user" class="login-input" placeholder="Benutzername (z. B. max)" autofocus />
     <input type="password" id="signup-pw" class="login-input" placeholder="Passwort (dein eigenes, merken!)" style="margin-top:10px;" />
     <button id="signup-submit" class="login-submit-btn" style="margin-top:10px;">Anfrage senden</button>
@@ -132,8 +131,7 @@ function showLoginOverlay(authConfig, onSuccess, existingOverlay) {
   overlay.className = "login-overlay";
   overlay.innerHTML = `
     <div class="login-card">
-      <div class="login-brand">B</div>
-      <div class="login-title">Basis</div>
+        <div class="login-title">Willis Dashboard</div>
       <div class="login-sub">Passwort eingeben, um dein Trainings-Dashboard zu entschlüsseln.</div>
       <input type="text" id="login-user" class="login-input" placeholder="Benutzername (nur für persönlichen Login)" />
       <input type="password" id="login-pw" class="login-input" placeholder="Passwort" style="margin-top:10px;" autofocus />
