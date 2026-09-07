@@ -1226,15 +1226,19 @@ function loginRequestItemHtml(issue) {
     <div class="qa-item">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <span class="qa-question">${escapeHtml(username)}</span>
-        <a href="${issue.html_url}" target="_blank" rel="noopener" class="tag ergaenzung" style="text-decoration:none;">Issue</a>
+        <a href="${issue.html_url}" target="_blank" rel="noopener" class="btn-small" style="text-decoration:none; padding:6px 12px; font-size:12px;">Auf GitHub öffnen →</a>
+      </div>
+      <div class="card-note" style="margin-top:8px;">
+        <b style="color:var(--teal);">So genehmigst du:</b> Issue öffnen (Button oben) → rechts bei "Labels" auf das Zahnrad → Label
+        <b>„genehmigt"</b> anklicken. Schaltet den Login automatisch frei, kein lokaler Schritt nötig.
       </div>
       ${command
-        ? `<div class="card-note" style="margin:8px 0 4px;">Lokal im sync-Ordner ausführen, dann committen &amp; pushen:</div>
-           <div class="exercise-row">
-             <span class="exercise-name" style="font-family:var(--font-display); font-size:11.5px; word-break:break-all;">${escapeHtml(command)}</span>
+        ? `<div class="card-note" style="margin-top:10px; opacity:.7;">Alternative falls die Automatik mal ausfällt (lokal im sync-Ordner, dann committen &amp; pushen):</div>
+           <div class="exercise-row" style="opacity:.7;">
+             <span class="exercise-name" style="font-family:var(--font-display); font-size:11px; word-break:break-all;">${escapeHtml(command)}</span>
              <button class="btn-small copy-cmd-btn" type="button" data-cmd="${escapeHtml(command)}" style="padding:6px 10px; font-size:11px;">Kopieren</button>
            </div>`
-        : `<div class="card-note" style="margin-top:6px; color:var(--amber);">Konnte Credential nicht aus dem Issue lesen – bitte Issue manuell öffnen und prüfen.</div>`}
+        : ""}
     </div>`;
 }
 
