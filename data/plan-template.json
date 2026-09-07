@@ -52,11 +52,11 @@
       "focus": "Langer Lauf – Fokustag",
       "units": [
         { "name": "Langer Lauf", "type": "lauf", "tag": "pflicht", "detail": "15 km · Zone 2 (130–135 bpm, 6:00–6:10 min/km)", "plannedDurationMin": 90, "keySession": true, "matchHint": { "activityTypes": ["running"], "minDistanceKm": 12 } },
-        { "name": "Bein-Stabi", "type": "kraft", "tag": "ergaenzung", "detail": "Einbeinstand, Copenhagen Plank, Ausfallschritte, Wadenheben · 3×10–12 Wdh. pro Seite, direkt im Anschluss", "plannedDurationMin": 20, "exercises": [
+        { "name": "Bein-Stabi", "type": "kraft", "tag": "ergaenzung", "detail": "Einbeinstand, Copenhagen Plank, Ausfallschritte, seitliches Beinheben · 3×10–12 Wdh. pro Seite, direkt im Anschluss", "plannedDurationMin": 20, "exercises": [
           { "name": "Einbeinstand", "sets": 3, "reps": "30–45 s", "rest": "30 s" },
           { "name": "Copenhagen Plank", "sets": 3, "reps": "20–30 s pro Seite", "rest": "30 s" },
           { "name": "Ausfallschritte", "sets": 3, "reps": "10–12 pro Seite", "rest": "30 s" },
-          { "name": "Wadenheben", "sets": 3, "reps": "15–20", "rest": "30 s" }
+          { "name": "Seitliches Beinheben", "sets": 3, "reps": "12–15 pro Seite", "rest": "30 s" }
         ], "matchHint": { "activityTypes": ["strength_training"] } },
         { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "10 min: jede Minute 10 Klimmzüge + 15 Liegestütze", "planLabel": "Plan 1", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
       ],
