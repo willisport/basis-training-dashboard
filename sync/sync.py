@@ -187,7 +187,7 @@ def main():
         hrv_baseline = garmin_source.fetch_hrv_baseline(api, today)
         vo2max_history = garmin_source.fetch_vo2max_history(api, today, days=WINDOW_WEEKS * 7 + 60)
         vo2max = vo2max_history[-1]["value"] if vo2max_history else None
-        weekly_steps = garmin_source.fetch_weekly_steps(api, this_monday, this_monday + timedelta(days=6))
+        steps_history = garmin_source.fetch_steps_history(api, window_start, today)
         print(f"  Garmin: {len(activities)} Aktivitaeten geladen")
     except Exception as e:
         print(f"[FEHLER] Garmin-Sync fehlgeschlagen, breche ab: {e}")
@@ -210,7 +210,7 @@ def main():
     upcoming_plan = build_upcoming_plan(plan, this_monday)
 
     week_days = [
-        build_day(plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today, weekly_steps)
+        build_day(plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today, steps_history)
         for i in range(7)
     ]
     week_start_str, week_end_str = iso_date(this_monday), iso_date(this_monday + timedelta(days=6))
@@ -309,6 +309,12 @@ def main():
         z2_runs = [a for a in wk_acts if a["type"] == "lauf" and a.get("paceSecPerKm") and a.get("avgHr")
                    and plan["profile"]["zone2HrLow"] - 5 <= a["avgHr"] <= plan["profile"]["zone2HrHigh"] + 5]
         pace = round(sum(a["paceSecPerKm"] for a in z2_runs) / len(z2_runs)) if z2_runs else None
+        wk_steps = [
+            steps_history[d]["steps"]
+            for i in range(7)
+            for d in [iso_date(wk_monday + timedelta(days=i))]
+            if d in steps_history and steps_history[d].get("steps") is not None
+        ]
         perf_weeks.append({
             "label": fmt_short(iso_date(wk_monday)),
             "vo2max": value_on_or_before(vo2max_history, iso_date(wk_sunday)),
@@ -316,6 +322,7 @@ def main():
             "runVolumeKm": round(sum(a["distanceKm"] for a in wk_acts if a["type"] == "lauf"), 1),
             "bikeVolumeKm": round(sum(a["distanceKm"] for a in wk_acts if a["type"] == "rad"), 1),
             "weightKg": weight_avg_in_week(weights, iso_date(wk_monday), iso_date(wk_sunday)),
+            "avgSteps": round(sum(wk_steps) / len(wk_steps)) if wk_steps else None,
         })
     # Luecken bei vo2max/weightKg mit letztem bekannten Wert auffuellen
     last_v, last_w = None, None

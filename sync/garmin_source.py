@@ -118,11 +118,11 @@ def fetch_daily_metrics(api: Garmin, day: datetime) -> dict:
     return out
 
 
-def fetch_weekly_steps(api: Garmin, week_start: datetime, week_end: datetime) -> dict:
-    """Schritte + Tagesziel pro Tag fuer eine Woche, keyed auf Datums-String."""
+def fetch_steps_history(api: Garmin, start: datetime, end: datetime) -> dict:
+    """Schritte + Tagesziel pro Tag fuer einen Zeitraum, keyed auf Datums-String."""
     out = {}
     try:
-        rows = api.get_daily_steps(week_start.strftime("%Y-%m-%d"), week_end.strftime("%Y-%m-%d"))
+        rows = api.get_daily_steps(start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
         for row in rows or []:
             date_str = row.get("calendarDate")
             if date_str:

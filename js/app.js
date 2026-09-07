@@ -658,7 +658,7 @@ function weeklyStepsHtml(days) {
     return `
       <div style="display:flex; flex-direction:column; align-items:center; gap:6px; flex:1;">
         <div style="font-size:11px; color:var(--muted);">${has ? d.steps.toLocaleString("de-DE") : "–"}</div>
-        <div style="width:100%; height:90px; display:flex; align-items:flex-end; background:var(--surface-2); border-radius:4px; overflow:hidden;">
+        <div style="width:100%; height:50px; display:flex; align-items:flex-end; background:var(--surface-2); border-radius:4px; overflow:hidden;">
           <div style="width:100%; height:${pct}%; background:${overGoal ? "var(--teal)" : "var(--ocean-500)"};"></div>
         </div>
         <div style="font-size:11px; color:var(--text-dim); font-weight:600;">${WEEKDAYS_SHORT[d.weekday]}</div>
@@ -697,7 +697,7 @@ function renderWoche(data) {
 
       ${w.days.some(d => d.steps !== undefined && d.steps !== null) ? `
       <div class="card">
-        <div class="card-head"><span class="card-title">Schritte diese Woche</span></div>
+        <div class="card-head"><span class="card-title">Schritte diese Woche</span><span class="card-note">Ø ${Math.round(w.days.filter(d => d.steps != null).reduce((s, d) => s + d.steps, 0) / w.days.filter(d => d.steps != null).length).toLocaleString("de-DE")} / Tag</span></div>
         ${weeklyStepsHtml(w.days)}
       </div>` : ""}
 
@@ -833,6 +833,8 @@ function renderPerformance(data) {
           deltaInfo(first.bikeVolumeKm, last.bikeVolumeKm, { unit: " km", sinceLabel: first.label }))}
         ${statCard("Gewicht", fmtVal(last.weightKg), "kg", sparkOf("weightKg"),
           deltaInfo(first.weightKg, last.weightKg, { decimals: 1, unit: " kg", sinceLabel: first.label, lowerIsBetter: true }))}
+        ${weeks.some(w => w.avgSteps != null) ? statCard("Schritte Ø/Tag", fmtVal(last.avgSteps), "", sparkOf("avgSteps"),
+          deltaInfo(first.avgSteps, last.avgSteps, { sinceLabel: first.label })) : ""}
       </div>
 
       <div class="grid grid-2">
