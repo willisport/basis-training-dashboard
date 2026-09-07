@@ -79,7 +79,7 @@ function saveOverrides(o) {
 async function initOverridesFromServer() {
   if (typeof IS_HOSTED === "undefined" || !IS_HOSTED || typeof CURRENT_DEK === "undefined" || !CURRENT_DEK) return;
   try {
-    const encFile = await fetchFileViaGithubApi("data/overrides.enc.json");
+    const encFile = await fetch(`${RAW_DATA_BASE}/data/overrides.enc.json`, { cache: "no-store" }).then(r => r.json());
     CACHED_OVERRIDES = await decryptDataFile(CURRENT_DEK, encFile);
   } catch {
     // Datei existiert evtl. noch nicht (erste Nutzung) oder Abruf fehlgeschlagen -
