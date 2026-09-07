@@ -19,6 +19,12 @@
       "iv": "EkVDIBFXOPQ7TT0z",
       "wrappedKey": "0KUk+iytGgu3PQbfuEOSZIfHS8btQ1mJA80MUIIm6TjGVGvsKyNhm68OV4csLkVY",
       "role": "owner"
+    },
+    "testuser": {
+      "salt": "QLRymIKF8pNJy3BFcFDsXg==",
+      "iv": "eISvrzi5WvY+6cPi",
+      "wrappedKey": "9R2AGJxZnnQpp4P8+1UdyQjG0MAaFvcKfvwwu9bXJXIU1+wIALkW1DI1Csb7W1J8",
+      "role": "viewer"
     }
   }
 }
