@@ -39,6 +39,12 @@
       "iv": "DjLLsnrqgd3QCsNT",
       "wrappedKey": "5aVX69EX/gZ/37EnFUY56Nt1BAF6vj4US5sTdxr68AYK9J67NPYZV0EuDvwFklzD",
       "role": "viewer"
+    },
+    "maxim": {
+      "salt": "o3o8B2zi0nqt4stbC8qROQ==",
+      "iv": "XYVNpBQgRToFTdHd",
+      "wrappedKey": "x/UnD7QhFkYBSo4bv1ecyCSZ8zm84GHtwY0NfiXphlv50K7Lm1WghPex6w74r7iG",
+      "role": "viewer"
     }
   }
 }
