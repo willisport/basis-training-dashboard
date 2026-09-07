@@ -288,9 +288,57 @@ function lineChartSVG(points, opts = {}) {
     </svg>`;
 }
 
+/* ---------- gestapeltes Wochenplan-Balkendiagramm (Woche-Tab) ---------- */
+
+function weekPlanBarsSVG(weeks) {
+  const w = 640, h = 210;
+  const padL = 30, padR = 10, padT = 10, padB = 26;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const totals = weeks.map(wk => wk.runHours + wk.bikeHours + wk.strengthHours);
+  const maxTotal = Math.max(...totals, 1) * 1.15;
+  const slot = innerW / weeks.length;
+  const barWidth = Math.min(38, slot * 0.55);
+  const scale = innerH / maxTotal;
+
+  const gridCount = 4;
+  const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
+    const frac = i / gridCount;
+    const y = padT + innerH * (1 - frac);
+    const val = Math.round(maxTotal * frac);
+    return `<line class="chart-grid-line" x1="${padL}" x2="${w - padR}" y1="${y}" y2="${y}"/>` +
+      `<text class="chart-axis-label" x="${padL - 6}" y="${y + 3}" text-anchor="end">${val}h</text>`;
+  }).join("");
+
+  const bars = weeks.map((wk, i) => {
+    const x = padL + i * slot + (slot - barWidth) / 2;
+    const segs = [
+      { val: wk.runHours, color: "var(--sky-400)" },
+      { val: wk.bikeHours, color: "var(--ocean-600)" },
+      { val: wk.strengthHours, color: "var(--teal)" },
+    ];
+    let yCursor = padT + innerH;
+    const rects = segs.filter(s => s.val > 0).map(seg => {
+      const segH = Math.max(seg.val * scale, 1);
+      yCursor -= segH;
+      return `<rect x="${x.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${barWidth}" height="${segH.toFixed(1)}" fill="${seg.color}" rx="2"></rect>`;
+    }).join("");
+    const highlight = wk.isCurrent
+      ? `<rect x="${(x - 6).toFixed(1)}" y="${padT - 4}" width="${barWidth + 12}" height="${innerH + 8}" fill="none" stroke="var(--sky-400)" stroke-width="1.5" rx="8" opacity="0.55"></rect>`
+      : "";
+    const labelStyle = wk.isCurrent ? ' style="fill:var(--ice-300); font-weight:700;"' : "";
+    const recoveryDot = wk.weekType === "recovery" ? ' <tspan style="fill:var(--amber);">•</tspan>' : "";
+    return `${highlight}${rects}<text class="chart-axis-label" x="${(x + barWidth / 2).toFixed(1)}" y="${h - padB + 14}" text-anchor="middle"${labelStyle}>${wk.label}${recoveryDot}</text>`;
+  }).join("");
+
+  return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}">${gridLines}${bars}</svg>`;
+}
+
 /* ---------- shared: full week overview (Heute + Woche + Kraft) ---------- */
 
-function unitRowHtml(u, dateStr) {
+function unitRowHtml(u, dateStr, weekDays, weekStart) {
+  const moveControls = weekDays
+    ? `${moveSelectHtml(u, dateStr, weekDays, weekStart)}${autoMoveButtonHtml(u)}`
+    : "";
   return `
     <div class="day-mini-unit">
       <span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>
@@ -299,13 +347,14 @@ function unitRowHtml(u, dateStr) {
         ${u.detail ? `<div class="unit-detail" style="margin-top:2px;">${escapeHtml(u.detail)}${u.plannedDurationMin ? ` · ~${u.plannedDurationMin} min` : ""}</div>` : ""}
         ${u.movedFromWeekday ? `<div class="moved-note">verschoben von ${u.movedFromWeekday}</div>` : ""}
       </span>
+      ${moveControls}
     </div>`;
 }
 
 function buildWeekOverview(data) {
   const todayDate = data.today.date;
   return data.week.days.map(d => {
-    const unitsHtml = d.units.map(u => unitRowHtml(u, d.date)).join("");
+    const unitsHtml = d.units.map(u => unitRowHtml(u, d.date, data.week.days, data.week.startDate)).join("");
     return `
       <div class="day-col ${d.date === todayDate ? "is-today" : ""}">
         <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
@@ -551,6 +600,16 @@ function renderWoche(data) {
     </div>
 
     <div class="stack">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Trainingsplan – nächste Wochen</span><span class="card-note">Geschätzte Stunden aus den Wochenzielen · <span style="color:var(--amber);">•</span> Recovery-Woche</span></div>
+        ${weekPlanBarsSVG(data.upcomingPlan || [])}
+        <div style="display:flex; gap:16px; margin-top:6px; font-size:11px; color:var(--muted); flex-wrap:wrap;">
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--sky-400); display:inline-block;"></span>Laufen</span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--ocean-600); display:inline-block;"></span>Radfahren</span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--teal); display:inline-block;"></span>Kraft/EMOM/Core</span>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-head"><span class="card-title">Wochenfortschritt im Detail</span></div>
         <div class="grid grid-2" style="gap:16px;">
@@ -969,7 +1028,7 @@ function renderKraft(data) {
       <div class="day-col ${d.date === data.today.date ? "is-today" : ""}">
         <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
         ${units.length
-          ? `<div class="stack" style="gap:6px;">${units.map(u => unitRowHtml(u, d.date)).join("")}</div>`
+          ? `<div class="stack" style="gap:6px;">${units.map(u => unitRowHtml(u, d.date, data.week.days, data.week.startDate)).join("")}</div>`
           : `<div class="card-note" style="margin-top:4px;">–</div>`}
       </div>`;
   }).join("");

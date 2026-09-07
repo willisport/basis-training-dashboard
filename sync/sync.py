@@ -59,6 +59,47 @@ def week_type_and_label(plan: dict, monday: datetime):
     return week_type, label
 
 
+def parse_pace_to_sec(pace_str: str) -> float:
+    m, s = pace_str.split(":")
+    return int(m) * 60 + int(s)
+
+
+def estimate_week_hours(plan: dict, week_type: str):
+    """Grobe Stunden-Schaetzung je Sportart aus den km-Zielen (fuer das
+    Wochenplan-Balkendiagramm) - Kraft/EMOM/Core-Zeit ist im Wochenmuster
+    ohnehin fix, unabhaengig vom Aufbau/Recovery-Typ."""
+    targets = plan["targetsByType"][week_type]
+    profile = plan["profile"]
+    zone2_avg_sec = (parse_pace_to_sec(profile["zone2PaceFastMinKm"]) + parse_pace_to_sec(profile["zone2PaceSlowMinKm"])) / 2
+    run_hours = targets["runVolumeKm"] * zone2_avg_sec / 3600
+    bike_avg_kmh = (profile["bikeAvgSpeedLowKmh"] + profile["bikeAvgSpeedHighKmh"]) / 2
+    bike_hours = targets["bikeVolumeKm"] / bike_avg_kmh if bike_avg_kmh > 0 else 0
+    strength_min = sum(
+        u.get("plannedDurationMin", 0)
+        for day in plan["weekPattern"]
+        for u in day["units"]
+        if u["type"] in ("kraft", "emom", "core")
+    )
+    return round(run_hours, 1), round(bike_hours, 1), round(strength_min / 60, 1)
+
+
+def build_upcoming_plan(plan: dict, this_monday: datetime, weeks_ahead: int = 6) -> list:
+    out = []
+    for i in range(weeks_ahead):
+        wk_monday = this_monday + timedelta(weeks=i)
+        week_type, _ = week_type_and_label(plan, wk_monday)
+        run_h, bike_h, strength_h = estimate_week_hours(plan, week_type)
+        out.append({
+            "label": fmt_short(iso_date(wk_monday)),
+            "weekType": week_type,
+            "isCurrent": i == 0,
+            "runHours": run_h,
+            "bikeHours": bike_h,
+            "strengthHours": strength_h,
+        })
+    return out
+
+
 def build_day(plan_day: dict, date: datetime, activities: list, today: datetime) -> dict:
     date_str = iso_date(date)
     day_acts = activities_on_date(activities, date_str)
@@ -161,6 +202,7 @@ def main():
     # --- Woche bauen ---
     week_type, week_label = week_type_and_label(plan, this_monday)
     targets = plan["targetsByType"][week_type]
+    upcoming_plan = build_upcoming_plan(plan, this_monday)
 
     week_days = [
         build_day(plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today)
@@ -302,6 +344,7 @@ def main():
         "week": week,
         "history": history,
         "performance": performance,
+        "upcomingPlan": upcoming_plan,
     }
 
     save_json(OUTPUT_PATH, output)
