@@ -309,7 +309,7 @@ a { color: var(--sky-400); }
 .unit-list { display: grid; gap: 8px; }
 .unit {
   display: grid;
-  grid-template-columns: 16px 1fr auto auto;
+  grid-template-columns: 16px 1fr auto auto auto;
   gap: 12px;
   align-items: center;
   background: var(--surface-2);

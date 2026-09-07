@@ -133,6 +133,60 @@ function moveSelectHtml(u, currentDate, weekDays, weekStart) {
   return `<select class="move-select" data-week-start="${weekStart}" data-home-weekday="${u.homeWeekday}" data-move-unit="${escapeHtml(u.name)}" title="Einheit auf anderen Tag verschieben">${options}</select>`;
 }
 
+function autoMoveButtonHtml(u) {
+  return `<button class="btn-small auto-move-btn" type="button" style="padding:6px 9px; font-size:12px;"
+    data-auto-weekday="${u.homeWeekday}" data-auto-unit="${escapeHtml(u.name)}"
+    title="Automatisch auf einen sinnvollen Tag verschieben – oder streichen, falls keiner passt">🪄</button>`;
+}
+
+function showToast(html, ms = 7000) {
+  const panel = document.getElementById("sync-panel");
+  if (!panel) return;
+  panel.innerHTML = html;
+  panel.hidden = false;
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => { panel.hidden = true; }, ms);
+}
+
+/**
+ * Sucht regelbasiert den sinnvollsten verbleibenden Tag dieser Woche fuer eine
+ * Einheit: Schluesseltage bleiben tabu, Tage mit bereits gleicher Pflicht-Sportart
+ * (z. B. schon ein Pflicht-Lauf/-Rad) werden vermieden, sonst gewinnt der Tag mit
+ * der geringsten bestehenden Last. Findet sich nichts Sinnvolles, wird die
+ * Einheit stattdessen als "abgelehnt" markiert statt sie irgendwo reinzuquetschen.
+ */
+function autoRescheduleUnit(homeWeekday, unitName) {
+  if (!APP_DATA) return;
+  const data = APP_DATA;
+  const weekStart = data.week.startDate;
+  const todayDate = data.today.date;
+
+  let currentDay = null, unit = null;
+  data.week.days.forEach(d => {
+    const found = d.units.find(u => u.name === unitName && u.homeWeekday === homeWeekday);
+    if (found) { currentDay = d; unit = found; }
+  });
+  if (!unit || !currentDay) return;
+
+  const candidates = data.week.days.filter(d => d.date >= todayDate && d.date !== currentDay.date);
+  let best = null, bestScore = Infinity;
+  candidates.forEach(d => {
+    if (d.units.some(u => u.keySession)) return;
+    let score = d.units.length;
+    if (d.units.some(u => u.type === unit.type && u.tag === "pflicht")) score += 10;
+    if (score < bestScore) { bestScore = score; best = d; }
+  });
+
+  if (!best || bestScore >= 10) {
+    setUnitOverride(currentDay.date, unitName, "skipped");
+    showToast(`<div class="title">Kein guter Tag gefunden</div><div>An den restlichen Tagen ist schon eine Pflicht-Einheit vom gleichen Typ geplant – „${escapeHtml(unitName)}" wurde für diese Woche als abgelehnt markiert, statt sie irgendwo reinzuquetschen.</div>`);
+  } else {
+    setMoveOverride(weekStart, homeWeekday, unitName, best.date);
+    showToast(`<div class="title">Automatisch verschoben</div><div>„${escapeHtml(unitName)}" → ${best.weekday} (${fmtDateShort(best.date)}) – dort war im Vergleich am wenigsten los.</div>`);
+  }
+  renderAll();
+}
+
 /* ---------- progress bar system ---------- */
 
 function progressBar({ name, value, target, unit = "", decimals = 0, variant = "" }) {
@@ -300,11 +354,18 @@ function setupTabs() {
 function setupInteractions() {
   document.body.addEventListener("click", (e) => {
     if (typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE === "viewer") return;
+
+    const autoBtn = e.target.closest(".auto-move-btn");
+    if (autoBtn) {
+      autoRescheduleUnit(autoBtn.dataset.autoWeekday, autoBtn.dataset.autoUnit);
+      return;
+    }
+
     const dot = e.target.closest(".status-dot.clickable");
     if (!dot) return;
     const current = ["done", "skipped", "planned"].find(s => dot.classList.contains(s)) || "planned";
     setUnitOverride(dot.dataset.toggleDate, dot.dataset.toggleUnit, STATUS_CYCLE[current]);
-    if (APP_DATA) renderAll(APP_DATA);
+    if (PRISTINE_DATA) renderAll();
   });
 
   document.body.addEventListener("change", (e) => {
@@ -315,7 +376,7 @@ function setupInteractions() {
     const homeWeekday = sel.dataset.homeWeekday;
     const isHome = APP_DATA && APP_DATA.week.days.find(d => d.weekday === homeWeekday)?.date === targetDate;
     setMoveOverride(sel.dataset.weekStart, homeWeekday, sel.dataset.moveUnit, isHome ? null : targetDate);
-    if (APP_DATA) renderAll(APP_DATA);
+    if (PRISTINE_DATA) renderAll();
   });
 }
 
@@ -370,6 +431,7 @@ function renderHeute(data) {
       </div>
       <span class="tag ${u.tag}">${u.tag}</span>
       ${moveSelectHtml(u, t.date, data.week.days, data.week.startDate)}
+      ${autoMoveButtonHtml(u)}
     </div>`).join("");
 
   document.getElementById("tab-heute").innerHTML = `
@@ -381,7 +443,7 @@ function renderHeute(data) {
 
     <div class="stack">
       <div class="card accent-teal">
-        <div class="card-head"><span class="card-title">Heutige Einheiten</span><span class="card-note">Kreis: geplant → erledigt → abgelehnt · rechts: Einheit verschieben</span></div>
+        <div class="card-head"><span class="card-title">Heutige Einheiten</span><span class="card-note">Kreis: geplant → erledigt → abgelehnt · Dropdown: Tag wählen · 🪄: automatisch sinnvoll verschieben</span></div>
         <div class="unit-list">${unitsHtml}</div>
       </div>
 
@@ -438,7 +500,10 @@ function renderHeute(data) {
 
       <div class="card">
         <div class="card-head"><span class="card-title">Tagesnotiz</span><span class="card-note">fließt in die Coach-Einschätzung ein · <span id="note-saved-hint" class="note-saved-hint">gespeichert</span></span></div>
-        <textarea id="daily-note" class="note-box" ${typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE === "viewer" ? "readonly" : ""} placeholder="Wie fühlst du dich heute? z. B. Beine schwer, gut geschlafen, motiviert…">${escapeHtml(t.note || "")}</textarea>
+        <div style="display:flex; gap:8px; align-items:flex-start;">
+          <textarea id="daily-note" class="note-box" ${typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE === "viewer" ? "readonly" : ""} placeholder="Wie fühlst du dich heute? z. B. Beine schwer, gut geschlafen, motiviert…">${escapeHtml(t.note || "")}</textarea>
+          <button id="note-mic-btn" class="btn-small" type="button" title="Notiz per Sprache diktieren">🎤</button>
+        </div>
       </div>
 
       <div class="card">
@@ -464,6 +529,10 @@ function renderHeute(data) {
           setTimeout(() => hint.classList.remove("show"), 1500);
         }
       }, 400);
+    });
+    attachSpeechButton(document.getElementById("note-mic-btn"), (transcript) => {
+      noteEl.value = (noteEl.value ? noteEl.value.trim() + " " : "") + transcript;
+      noteEl.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
 }
@@ -796,6 +865,32 @@ function answerCoachQuestion(question, data) {
   return "Dazu hab ich noch keine feste Antwort. Frag z. B. nach Schlaf, Erholung, Gewicht, VO2max, Wochenfortschritt (Lauf/Rad/Zeit), dem langen Lauf, den Intervallen oder ob du heute trainieren solltest.";
 }
 
+/**
+ * Verbindet einen Mikrofon-Button per Web Speech API mit einer Callback-Funktion,
+ * die den erkannten Text bekommt. Rein lokal im Browser, keine Daten verlassen das Geraet
+ * ausser an die Spracherkennung des Browsers/Betriebssystems selbst.
+ */
+function attachSpeechButton(micBtn, onTranscript) {
+  if (!micBtn) return;
+  const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognitionImpl) {
+    micBtn.disabled = true;
+    micBtn.title = "Spracheingabe wird von diesem Browser nicht unterstützt";
+    return;
+  }
+  const recognition = new SpeechRecognitionImpl();
+  recognition.lang = "de-DE";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  micBtn.addEventListener("click", () => {
+    micBtn.classList.add("is-listening");
+    try { recognition.start(); } catch { /* schon aktiv */ }
+  });
+  recognition.addEventListener("result", (e) => onTranscript(e.results[0][0].transcript));
+  recognition.addEventListener("end", () => micBtn.classList.remove("is-listening"));
+  recognition.addEventListener("error", () => micBtn.classList.remove("is-listening"));
+}
+
 function setupCoachQA(data) {
   const input = document.getElementById("coach-question");
   const askBtn = document.getElementById("coach-ask-btn");
@@ -816,24 +911,7 @@ function setupCoachQA(data) {
 
   askBtn.addEventListener("click", ask);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
-
-  const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognitionImpl) {
-    micBtn.disabled = true;
-    micBtn.title = "Spracheingabe wird von diesem Browser nicht unterstützt";
-    return;
-  }
-  const recognition = new SpeechRecognitionImpl();
-  recognition.lang = "de-DE";
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  micBtn.addEventListener("click", () => {
-    micBtn.classList.add("is-listening");
-    try { recognition.start(); } catch { /* schon aktiv */ }
-  });
-  recognition.addEventListener("result", (e) => { input.value = e.results[0][0].transcript; });
-  recognition.addEventListener("end", () => micBtn.classList.remove("is-listening"));
-  recognition.addEventListener("error", () => micBtn.classList.remove("is-listening"));
+  attachSpeechButton(micBtn, (transcript) => { input.value = transcript; });
 }
 
 /* ---------- render: Kraft ---------- */
@@ -849,17 +927,41 @@ function strengthUnitRow(u, dateStr) {
     </div>`;
 }
 
+function strengthUnitBlock(u, dateStr) {
+  if (u.exercises && u.exercises.length) {
+    return `
+      <div class="card accent-teal">
+        <div class="card-head">
+          <span class="card-title" style="display:flex; align-items:center; gap:8px; text-transform:none; font-size:15px;">
+            <span class="status-dot ${u.status} clickable" data-toggle-date="${dateStr}" data-toggle-unit="${escapeHtml(u.name)}"></span>
+            ${escapeHtml(u.name)}
+          </span>
+          <span class="card-note">${u.plannedDurationMin ? `~${u.plannedDurationMin} min` : ""}</span>
+        </div>
+        <div class="exercise-list">${u.exercises.map(e => `
+          <div class="exercise-row">
+            <span class="exercise-name">${escapeHtml(e.name)}</span>
+            <span class="exercise-spec">${e.sets}×${e.reps} · ${escapeHtml(e.rest)} Pause</span>
+          </div>`).join("")}</div>
+      </div>`;
+  }
+  return `<div class="card"><div class="exercise-list">${strengthUnitRow(u, dateStr)}</div></div>`;
+}
+
 function renderKraft(data) {
   const isStrength = (u) => u.type === "kraft" || u.type === "emom";
   const todayEntry = data.week.days.find(d => d.date === data.today.date);
   const todayUnits = todayEntry ? todayEntry.units.filter(isStrength) : [];
 
-  const todayCard = todayUnits.length
-    ? `<div class="card accent-teal">
-         <div class="card-head"><span class="card-title">Heute</span></div>
-         <div class="exercise-list">${todayUnits.map(u => strengthUnitRow(u, data.today.date)).join("")}</div>
-       </div>`
-    : `<div class="card"><div class="card-head"><span class="card-title">Heute</span></div><div class="card-note">Kein Kraft-/EMOM-Programm heute.</div></div>`;
+  const todayCard = `
+    <div>
+      <div class="card-title" style="margin-bottom:10px;">Heute</div>
+      <div class="stack">
+        ${todayUnits.length
+          ? todayUnits.map(u => strengthUnitBlock(u, data.today.date)).join("")
+          : '<div class="card"><div class="card-note">Kein Kraft-/EMOM-Programm heute.</div></div>'}
+      </div>
+    </div>`;
 
   const weekDays = data.week.days.map(d => {
     const units = d.units.filter(isStrength);
@@ -890,7 +992,11 @@ function renderKraft(data) {
 
 /* ---------- boot ---------- */
 
-function renderAll(data) {
+let PRISTINE_DATA = null;
+
+function renderAll(freshData) {
+  if (freshData) PRISTINE_DATA = freshData;
+  const data = structuredClone(PRISTINE_DATA);
   applyMoves(data);
   applyOverrides(data);
   APP_DATA = data;
