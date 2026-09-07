@@ -1459,7 +1459,8 @@ function renderAll(freshData) {
   applyMoves(data);
   applyOverrides(data);
   APP_DATA = data;
-  document.getElementById("sidenav-goal").textContent = data.profile.goal.replace("Ultramarathon ", "");
+  const sidenavGoalEl = document.getElementById("sidenav-goal");
+  if (sidenavGoalEl) sidenavGoalEl.textContent = data.profile.goal.replace("Ultramarathon ", "");
   renderHeute(data);
   renderWoche(data);
   renderVerlauf(data);
