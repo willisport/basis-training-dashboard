@@ -13,12 +13,5 @@
     "iv": "vZJxcD78NRr/fg3S",
     "wrappedKey": "B1ygv9YWyNEUfP/tL+L8ntz0WuHrQcGAcghhAKk77p/cgQnOBEqp1r0CGjTJumcT"
   },
-  "users": {
-    "autotest": {
-      "salt": "V+XpVMX1YmbP6jD4LJtrUA==",
-      "iv": "F+3qMHQmQane+TGK",
-      "wrappedKey": "GVuxBBlt0wL1wMKKFO0ZrdVItkD7CAo2lWxvm/7QObEYE6NiFpkWFhx+iUKiSFCx",
-      "role": "viewer"
-    }
-  }
+  "users": {}
 }
