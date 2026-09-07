@@ -3,11 +3,13 @@
 
 const AUTH_SESSION_KEY = "basisAuthSession_v2";
 const GITHUB_REPO = "willisport/willisport.github.io";
+const HOSTED_SYNC_WORKER_URL = "https://basis-sync-worker.willi-laurisch.workers.dev";
 
 let CURRENT_ROLE = "owner";
 let CURRENT_USERNAME = "";
 let IS_HOSTED = false;
 let CURRENT_AUTH_CONFIG = null;
+let CURRENT_DEK = null;
 
 function b64ToBytes(b64) {
   const bin = atob(b64);
@@ -200,13 +202,60 @@ function setupLogoutControl() {
   });
 }
 
-function setupHostedSyncButton() {
+function setupHostedSyncButton(onData) {
   const btn = document.getElementById("hosted-sync-btn");
+  const panel = document.getElementById("sync-panel");
   if (!btn || CURRENT_ROLE !== "owner") return;
   btn.hidden = false;
-  btn.addEventListener("click", () => {
-    window.open(`https://github.com/${GITHUB_REPO}/actions/workflows/sync.yml`, "_blank");
+
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.classList.add("is-syncing");
+    if (panel) {
+      panel.innerHTML = `<div class="title">Sync wird gestartet…</div>`;
+      panel.hidden = false;
+    }
+
+    try {
+      const res = await fetch(HOSTED_SYNC_WORKER_URL, { method: "POST" });
+      const result = await res.json();
+      if (!result.ok) throw new Error(result.error || "Unbekannter Fehler");
+
+      if (panel) panel.innerHTML = `<div class="title">Sync gestartet</div><div>Läuft im Hintergrund, dauert ca. 1–2 Minuten…</div>`;
+
+      const prevSyncedAt = (typeof APP_DATA !== "undefined" && APP_DATA) ? APP_DATA.syncedAt : undefined;
+      const gotFreshData = await pollForFreshSync(prevSyncedAt);
+
+      if (gotFreshData) {
+        if (panel) panel.innerHTML = `<div class="title">Sync erfolgreich</div><div>Daten sind aktuell.</div>`;
+        onData(gotFreshData);
+      } else if (panel) {
+        panel.innerHTML = `<div class="title">Sync läuft noch</div><div>Dauert diesmal länger – lad die Seite in 1–2 Minuten neu.</div>`;
+      }
+    } catch (err) {
+      if (panel) {
+        panel.innerHTML = `<div class="title">Fehler beim Sync</div><div>${escapeHtml(String(err.message || err))}</div>`;
+        panel.hidden = false;
+      }
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove("is-syncing");
+      setTimeout(() => { if (panel) panel.hidden = true; }, 12000);
+    }
   });
+}
+
+async function pollForFreshSync(prevSyncedAt, maxWaitMs = 120000, intervalMs = 8000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise(r => setTimeout(r, intervalMs));
+    try {
+      const encFile = await fetch("data/training-data.enc.json", { cache: "no-store" }).then(r => r.json());
+      const data = await decryptDataFile(CURRENT_DEK, encFile);
+      if (data.syncedAt && data.syncedAt !== prevSyncedAt) return data;
+    } catch { /* naechster Versuch */ }
+  }
+  return null;
 }
 
 function setupLoginsNavItem() {
@@ -248,13 +297,14 @@ async function bootWithAuth(onData) {
   const loadEncryptedAndRender = async (dekRawBytes, role, username) => {
     CURRENT_ROLE = role;
     CURRENT_USERNAME = username || "";
+    CURRENT_DEK = dekRawBytes;
     document.body.classList.toggle("is-viewer", role === "viewer");
     try {
       const encFile = await fetch("data/training-data.enc.json", { cache: "no-store" }).then(r => r.json());
       const data = await decryptDataFile(dekRawBytes, encFile);
       onData(data);
       setupLogoutControl();
-      setupHostedSyncButton();
+      setupHostedSyncButton(onData);
       setupLoginsNavItem();
       showSyncStatus(data.syncedAt);
     } catch (err) {
