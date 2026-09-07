@@ -1,0 +1,6 @@
+# Die verschluesselte Trainingsdaten-Datei wird sowohl vom lokalen Sync als
+# auch vom automatischen GitHub-Actions-Bot ueberschrieben. Inhaltliche
+# Merge-Konflikte darin sind bedeutungslos (beide Seiten sind gueltige,
+# frische Sync-Ergebnisse) - bei einer Kollision gewinnt einfach die lokale
+# Version, damit man nicht jedes Mal manuell aufloesen muss.
+data/training-data.enc.json merge=ours
