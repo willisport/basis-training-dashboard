@@ -109,9 +109,9 @@ def fetch_daily_metrics(api: Garmin, day: datetime) -> dict:
 
     try:
         hrv = api.get_hrv_data_range(date_str, date_str)
-        if hrv:
-            entry = hrv[0] if isinstance(hrv, list) else hrv
-            out["hrv"] = (entry.get("hrvSummary") or {}).get("lastNightAvg")
+        summaries = (hrv or {}).get("hrvSummaries") or []
+        if summaries:
+            out["hrv"] = summaries[0].get("lastNightAvg")
     except Exception as e:
         print(f"  [warn] HRV fuer {date_str} nicht verfuegbar: {e}")
 
@@ -183,11 +183,8 @@ def fetch_hrv_baseline(api: Garmin, end: datetime, days: int = 14):
     start = end - timedelta(days=days)
     try:
         hrv_range = api.get_hrv_data_range(start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
-        values = [
-            (e.get("hrvSummary") or {}).get("lastNightAvg")
-            for e in (hrv_range if isinstance(hrv_range, list) else [])
-        ]
-        values = [v for v in values if v]
+        summaries = (hrv_range or {}).get("hrvSummaries") or []
+        values = [s.get("lastNightAvg") for s in summaries if s.get("lastNightAvg")]
         return round(sum(values) / len(values)) if values else None
     except Exception:
         return None

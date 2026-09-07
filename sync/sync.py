@@ -32,6 +32,7 @@ OUTPUT_PATH = ROOT / "data" / "training-data.json"
 ENCRYPTED_OUTPUT_PATH = ROOT / "data" / "training-data.enc.json"
 
 WINDOW_WEEKS = 9  # 8 Wochen Performance-Verlauf + aktuelle Woche
+MACRO_GOAL_DATE = datetime(2027, 8, 31)  # Zielmonat des Ultramarathons - Makro-Uebersicht laeuft bis hierhin
 
 
 def load_json(path: Path) -> dict:
@@ -241,7 +242,8 @@ def main():
     # --- Woche bauen ---
     week_type, week_label = week_type_and_label(plan, this_monday)
     targets = plan["targetsByType"][week_type]
-    upcoming_plan = build_upcoming_plan(plan, this_monday)
+    weeks_to_goal = max(1, (MACRO_GOAL_DATE - this_monday).days // 7)
+    upcoming_plan = build_upcoming_plan(plan, this_monday, weeks_ahead=weeks_to_goal)
 
     week_days = [
         build_day(plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today, steps_history)

@@ -342,13 +342,15 @@ function lineChartSVG(points, opts = {}) {
 
 function weekPlanBarsSVG(weeks) {
   const w = 640, h = 130;
-  const padL = 28, padR = 10, padT = 8, padB = 22;
+  const padL = 28, padR = 10, padT = 8, padB = 18;
   const innerW = w - padL - padR, innerH = h - padT - padB;
   const totals = weeks.map(wk => wk.runHours + wk.bikeHours + wk.strengthHours);
   const maxTotal = Math.max(...totals, 1) * 1.15;
   const slot = innerW / weeks.length;
-  const barWidth = Math.min(24, slot * 0.45);
+  const barWidth = Math.max(1.5, Math.min(20, slot * 0.65));
   const scale = innerH / maxTotal;
+  const monthOf = (label) => (label || "").split(".")[1];
+  const monthShort = (mm) => MONTH_NAMES[parseInt(mm, 10) - 1]?.slice(0, 3) || "";
 
   const gridCount = 4;
   const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
@@ -370,14 +372,23 @@ function weekPlanBarsSVG(weeks) {
     const rects = segs.filter(s => s.val > 0).map(seg => {
       const segH = Math.max(seg.val * scale, 1);
       yCursor -= segH;
-      return `<rect x="${x.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${barWidth}" height="${segH.toFixed(1)}" fill="${seg.color}" rx="2"></rect>`;
+      return `<rect x="${x.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${barWidth}" height="${segH.toFixed(1)}" fill="${seg.color}" rx="1"></rect>`;
     }).join("");
     const highlight = wk.isCurrent
-      ? `<rect x="${(x - 6).toFixed(1)}" y="${padT - 4}" width="${barWidth + 12}" height="${innerH + 8}" fill="none" stroke="var(--sky-400)" stroke-width="1.5" rx="8" opacity="0.55"></rect>`
+      ? `<rect x="${(x - 4).toFixed(1)}" y="${padT - 4}" width="${barWidth + 8}" height="${innerH + 8}" fill="none" stroke="var(--sky-400)" stroke-width="1.5" rx="6" opacity="0.55"></rect>`
       : "";
+    const recoveryDot = wk.weekType === "recovery"
+      ? `<circle cx="${(x + barWidth / 2).toFixed(1)}" cy="${padT - 1}" r="2" fill="var(--amber)"></circle>`
+      : "";
+
+    const thisMonth = monthOf(wk.label);
+    const prevMonth = i > 0 ? monthOf(weeks[i - 1].label) : null;
+    const showLabel = i === 0 || thisMonth !== prevMonth;
     const labelStyle = wk.isCurrent ? ' style="fill:var(--ice-300); font-weight:700;"' : "";
-    const recoveryDot = wk.weekType === "recovery" ? ' <tspan style="fill:var(--amber);">•</tspan>' : "";
-    return `${highlight}${rects}<text class="chart-axis-label" x="${(x + barWidth / 2).toFixed(1)}" y="${h - padB + 14}" text-anchor="middle"${labelStyle}>${wk.label}${recoveryDot}</text>`;
+    const label = showLabel
+      ? `<text class="chart-axis-label" x="${(x + barWidth / 2).toFixed(1)}" y="${h - padB + 14}" text-anchor="middle"${labelStyle}>${monthShort(thisMonth)}</text>`
+      : "";
+    return `${highlight}${rects}${recoveryDot}${label}`;
   }).join("");
 
   return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}">${gridLines}${bars}</svg>`;
@@ -1241,6 +1252,64 @@ function mentionedDaysContext(text) {
     .filter(Boolean);
 }
 
+function findUnitMention(text) {
+  if (!text || !APP_DATA) return null;
+  const lower = text.toLowerCase();
+  const candidates = [];
+  APP_DATA.week.days.forEach(d => {
+    d.units.forEach(u => {
+      const key = u.name.split(/[\s-]/)[0].toLowerCase();
+      if (key.length >= 4 && lower.includes(key)) candidates.push({ day: d, unit: u });
+    });
+  });
+  candidates.sort((a, b) => b.unit.name.length - a.unit.name.length);
+  return candidates[0] || null;
+}
+
+function suggestSwapForRequest(text) {
+  if (!text || !APP_DATA) return null;
+  const lower = text.toLowerCase();
+  const targetDay = APP_DATA.week.days.find(d => lower.includes(d.weekday.toLowerCase()));
+  if (!targetDay) return null;
+
+  const mention = findUnitMention(text);
+  if (!mention || mention.day.date === targetDay.date) return null;
+
+  const sourceDay = mention.day;
+  const sourceUnit = mention.unit;
+  const targetUnit = targetDay.units.find(u => u.tag === "pflicht" && u.type !== "kraft");
+  if (!targetUnit || targetUnit.name === sourceUnit.name) return null;
+
+  const warnings = [];
+  if (sourceUnit.keySession) warnings.push(`"${sourceUnit.name}" ist eine Schlüsseleinheit – nicht ideal zum Verschieben`);
+  if (targetUnit.keySession) warnings.push(`"${targetUnit.name}" ist eine Schlüsseleinheit – nicht ideal zum Verschieben`);
+  if (sourceDay.units.some(u => u.keySession && u.name !== sourceUnit.name)) {
+    warnings.push(`An ${sourceDay.weekday} steht noch eine andere Schlüsseleinheit an`);
+  }
+  if (targetDay.units.some(u => u.keySession && u.name !== targetUnit.name)) {
+    warnings.push(`An ${targetDay.weekday} steht noch eine andere Schlüsseleinheit an`);
+  }
+
+  return { sourceDay, sourceUnit, targetDay, targetUnit, warnings };
+}
+
+function swapSuggestionHtml(sug) {
+  return `
+    <div class="swap-suggestion" style="margin-top:8px; padding:10px; border-radius:8px; background:var(--surface-2);">
+      <div class="card-note"><b>Vorschlag:</b> „${escapeHtml(sug.sourceUnit.name)}" (${sug.sourceDay.weekday}) ↔ „${escapeHtml(sug.targetUnit.name)}" (${sug.targetDay.weekday}) tauschen</div>
+      <div class="card-note" style="margin-top:6px; color:${sug.warnings.length ? "var(--amber)" : "var(--teal)"};">
+        Meine Einschätzung: ${sug.warnings.length ? sug.warnings.map(escapeHtml).join("; ") : "sieht unproblematisch aus."}
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn-small apply-swap-btn" type="button"
+          data-source-date="${sug.sourceDay.date}" data-source-weekday="${sug.sourceUnit.homeWeekday}" data-source-unit="${escapeHtml(sug.sourceUnit.name)}"
+          data-target-date="${sug.targetDay.date}" data-target-weekday="${sug.targetUnit.homeWeekday}" data-target-unit="${escapeHtml(sug.targetUnit.name)}"
+          style="background:var(--teal); color:#fff;">✓ Tauschen</button>
+        <button class="btn-small dismiss-swap-btn" type="button">✗ Verwerfen</button>
+      </div>
+    </div>`;
+}
+
 function dayContextHtml(day) {
   const unitsHtml = day.units.length
     ? day.units.map(u => `<div class="day-mini-unit"><span style="flex:1;">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}</span>${moveSelectHtml(u, day.date, APP_DATA.week.days, APP_DATA.week.startDate)}${autoMoveButtonHtml(u)}</div>`).join("")
@@ -1256,17 +1325,19 @@ function requestItemHtml(issue, comments) {
   const isOpen = issue.state === "open";
   const commentsHtml = (comments || []).map(c => `
     <div class="qa-answer" style="margin-top:4px; padding-left:10px; border-left:2px solid var(--ocean-600);">${escapeHtml(c.body)}</div>`).join("");
-  const days = (canEdit() && isOpen) ? mentionedDaysContext(`${issue.title} ${issue.body || ""}`) : [];
+  const fullText = `${issue.title} ${issue.body || ""}`;
+  const swap = (canEdit() && isOpen) ? suggestSwapForRequest(fullText) : null;
+  const days = (canEdit() && isOpen && !swap) ? mentionedDaysContext(fullText) : [];
   return `
     <div class="qa-item" data-issue-number="${issue.number}">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
         <span class="qa-question">${escapeHtml(issue.title)}</span>
         <span class="tag ${isOpen ? "ergaenzung" : "pflicht"}">${isOpen ? "offen" : "erledigt"}</span>
       </div>
-      ${issue.body ? `<div class="qa-answer" style="margin-top:4px;">${escapeHtml(issue.body.slice(0, 300))}</div>` : ""}
+      ${issue.body && issue.body.trim() !== issue.title.trim() ? `<div class="qa-answer" style="margin-top:4px;">${escapeHtml(issue.body.slice(0, 300))}</div>` : ""}
       ${commentsHtml}
       <div class="card-note" style="margin-top:6px;">${new Date(issue.created_at).toLocaleDateString("de-DE")}</div>
-      ${days.map(dayContextHtml).join("")}
+      ${swap ? swapSuggestionHtml(swap) : days.map(dayContextHtml).join("")}
       ${(canEdit() && isOpen) ? `
         <div style="display:flex; gap:8px; margin-top:8px;">
           <input type="text" class="text-input reply-request-input" placeholder="Antwort schreiben (optional)…" style="flex:1;" />
@@ -1299,6 +1370,22 @@ async function renderRequestsList(result) {
       const replyText = input.value.trim();
       if (!replyText) return;
       replyToRequest(Number(btn.dataset.issueNumber), replyText, statusEl, btn);
+    });
+  });
+
+  list.querySelectorAll(".apply-swap-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const d = btn.dataset;
+      const weekStart = APP_DATA.week.startDate;
+      setMoveOverride(weekStart, d.sourceWeekday, d.sourceUnit, d.targetDate);
+      setMoveOverride(weekStart, d.targetWeekday, d.targetUnit, d.sourceDate);
+      renderAll();
+      btn.closest(".swap-suggestion").innerHTML = `<div class="card-note" style="color:var(--teal);">Getauscht.</div>`;
+    });
+  });
+  list.querySelectorAll(".dismiss-swap-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      btn.closest(".swap-suggestion").remove();
     });
   });
 }
