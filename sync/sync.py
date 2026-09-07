@@ -100,7 +100,7 @@ def build_upcoming_plan(plan: dict, this_monday: datetime, weeks_ahead: int = 6)
     return out
 
 
-def build_day(plan_day: dict, date: datetime, activities: list, today: datetime) -> dict:
+def build_day(plan_day: dict, date: datetime, activities: list, today: datetime, steps_by_date: dict) -> dict:
     date_str = iso_date(date)
     day_acts = activities_on_date(activities, date_str)
     units = []
@@ -123,6 +123,10 @@ def build_day(plan_day: dict, date: datetime, activities: list, today: datetime)
     out = {"date": date_str, "weekday": plan_day["weekday"], "focus": plan_day["focus"], "units": units}
     if plan_day.get("fallbackNote"):
         out["fallbackNote"] = plan_day["fallbackNote"]
+    day_steps = steps_by_date.get(date_str)
+    if day_steps:
+        out["steps"] = day_steps.get("steps")
+        out["stepGoal"] = day_steps.get("stepGoal")
     return out
 
 
@@ -183,6 +187,7 @@ def main():
         hrv_baseline = garmin_source.fetch_hrv_baseline(api, today)
         vo2max_history = garmin_source.fetch_vo2max_history(api, today, days=WINDOW_WEEKS * 7 + 60)
         vo2max = vo2max_history[-1]["value"] if vo2max_history else None
+        weekly_steps = garmin_source.fetch_weekly_steps(api, this_monday, this_monday + timedelta(days=6))
         print(f"  Garmin: {len(activities)} Aktivitaeten geladen")
     except Exception as e:
         print(f"[FEHLER] Garmin-Sync fehlgeschlagen, breche ab: {e}")
@@ -205,7 +210,7 @@ def main():
     upcoming_plan = build_upcoming_plan(plan, this_monday)
 
     week_days = [
-        build_day(plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today)
+        build_day(plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today, weekly_steps)
         for i in range(7)
     ]
     week_start_str, week_end_str = iso_date(this_monday), iso_date(this_monday + timedelta(days=6))
@@ -252,6 +257,8 @@ def main():
             "weightKg": weight_on_or_before(weights, iso_date(today), fallback=(previous.get("today") or {}).get("body", {}).get("weightKg")),
             "vo2max": vo2max,
         },
+        "steps": week_days[today_idx].get("steps"),
+        "stepGoal": week_days[today_idx].get("stepGoal"),
     }
 
     # --- Verlauf: Wochen-/Monatsvergleich + Log ---

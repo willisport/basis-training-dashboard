@@ -565,6 +565,10 @@ function renderHeute(data) {
             <div class="stat"><span class="stat-value xl">${fmtVal(t.body.weightKg)}<span class="unit">kg</span></span><span class="stat-label">Gewicht</span></div>
             <div class="stat"><span class="stat-value xl">${fmtVal(t.body.vo2max)}</span><span class="stat-label">VO2max</span></div>
           </div>
+          ${t.steps !== undefined && t.steps !== null ? `
+          <div style="margin-top:14px;">
+            ${progressBar({ name: "Schritte heute", value: t.steps, target: t.stepGoal || 10000, unit: "", decimals: 0 })}
+          </div>` : ""}
         </div>
       </div>
 
@@ -609,6 +613,24 @@ function renderHeute(data) {
 
 /* ---------- render: Woche ---------- */
 
+function weeklyStepsHtml(days) {
+  const maxSteps = Math.max(...days.map(d => d.steps || 0), 1);
+  const bars = days.map(d => {
+    const has = d.steps !== undefined && d.steps !== null;
+    const pct = has ? clamp((d.steps / maxSteps) * 100, 3, 100) : 0;
+    const overGoal = has && d.stepGoal && d.steps >= d.stepGoal;
+    return `
+      <div style="display:flex; flex-direction:column; align-items:center; gap:6px; flex:1;">
+        <div style="font-size:11px; color:var(--muted);">${has ? d.steps.toLocaleString("de-DE") : "–"}</div>
+        <div style="width:100%; height:90px; display:flex; align-items:flex-end; background:var(--surface-2); border-radius:4px; overflow:hidden;">
+          <div style="width:100%; height:${pct}%; background:${overGoal ? "var(--teal)" : "var(--ocean-500)"};"></div>
+        </div>
+        <div style="font-size:11px; color:var(--text-dim); font-weight:600;">${WEEKDAYS_SHORT[d.weekday]}</div>
+      </div>`;
+  }).join("");
+  return `<div style="display:flex; gap:8px;">${bars}</div>`;
+}
+
 function renderWoche(data) {
   const w = data.week;
   const selfCoachHtml = w.selfCoaching.map(s => `<li>${escapeHtml(s)}</li>`).join("");
@@ -636,6 +658,12 @@ function renderWoche(data) {
       </div>
 
       <div class="week-grid">${buildWeekOverview(data)}</div>
+
+      ${w.days.some(d => d.steps !== undefined && d.steps !== null) ? `
+      <div class="card">
+        <div class="card-head"><span class="card-title">Schritte diese Woche</span></div>
+        ${weeklyStepsHtml(w.days)}
+      </div>` : ""}
 
       <div class="card accent-amber">
         <div class="card-head"><span class="card-title">Selbststeuerung &amp; Fallback</span></div>
