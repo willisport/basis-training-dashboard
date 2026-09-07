@@ -33,12 +33,6 @@
       "wrappedKey": "0XaOavB1nhD7XaWgykD93ApnJVSYS+km0+eIKOGt+qxmHQDCgrVrFOH2gox+en88",
       "role": "viewer",
       "sessionVersion": 2
-    },
-    "julius": {
-      "salt": "4wUFFLFHgX0LnjP1H3Ybzw==",
-      "iv": "g8C4i3La3KxINwJS",
-      "wrappedKey": "Chatyj48cRyO2IyWebF2AJhQnu0vrBxY/xxmDR8I8FpEXgNTW3XwsIvzLwLAxdgz",
-      "role": "viewer"
     }
   }
 }
