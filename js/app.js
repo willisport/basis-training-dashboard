@@ -291,13 +291,13 @@ function lineChartSVG(points, opts = {}) {
 /* ---------- gestapeltes Wochenplan-Balkendiagramm (Woche-Tab) ---------- */
 
 function weekPlanBarsSVG(weeks) {
-  const w = 640, h = 210;
-  const padL = 30, padR = 10, padT = 10, padB = 26;
+  const w = 640, h = 130;
+  const padL = 28, padR = 10, padT = 8, padB = 22;
   const innerW = w - padL - padR, innerH = h - padT - padB;
   const totals = weeks.map(wk => wk.runHours + wk.bikeHours + wk.strengthHours);
   const maxTotal = Math.max(...totals, 1) * 1.15;
   const slot = innerW / weeks.length;
-  const barWidth = Math.min(38, slot * 0.55);
+  const barWidth = Math.min(24, slot * 0.45);
   const scale = innerH / maxTotal;
 
   const gridCount = 4;
@@ -601,16 +601,6 @@ function renderWoche(data) {
 
     <div class="stack">
       <div class="card">
-        <div class="card-head"><span class="card-title">Trainingsplan – nächste Wochen</span><span class="card-note">Geschätzte Stunden aus den Wochenzielen · <span style="color:var(--amber);">•</span> Recovery-Woche</span></div>
-        ${weekPlanBarsSVG(data.upcomingPlan || [])}
-        <div style="display:flex; gap:16px; margin-top:6px; font-size:11px; color:var(--muted); flex-wrap:wrap;">
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--sky-400); display:inline-block;"></span>Laufen</span>
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--ocean-600); display:inline-block;"></span>Radfahren</span>
-          <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--teal); display:inline-block;"></span>Kraft/EMOM/Core</span>
-        </div>
-      </div>
-
-      <div class="card">
         <div class="card-head"><span class="card-title">Wochenfortschritt im Detail</span></div>
         <div class="grid grid-2" style="gap:16px;">
           ${progressBar({ name: "Lauf", value: w.actuals.runVolumeKm, target: w.targets.runVolumeKm, unit: " km", decimals: 1 })}
@@ -629,6 +619,16 @@ function renderWoche(data) {
       <div class="card accent-amber">
         <div class="card-head"><span class="card-title">Selbststeuerung &amp; Fallback</span></div>
         <ul class="coach-reasons">${selfCoachHtml}</ul>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Trainingsplan – nächste Wochen</span><span class="card-note">Geschätzte Stunden aus den Wochenzielen · <span style="color:var(--amber);">•</span> Recovery-Woche</span></div>
+        ${weekPlanBarsSVG(data.upcomingPlan || [])}
+        <div style="display:flex; gap:16px; margin-top:6px; font-size:11px; color:var(--muted); flex-wrap:wrap;">
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--sky-400); display:inline-block;"></span>Laufen</span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--ocean-600); display:inline-block;"></span>Radfahren</span>
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--teal); display:inline-block;"></span>Kraft/EMOM/Core</span>
+        </div>
       </div>
     </div>`;
 }
@@ -1007,6 +1007,24 @@ function strengthUnitBlock(u, dateStr) {
   return `<div class="card"><div class="exercise-list">${strengthUnitRow(u, dateStr)}</div></div>`;
 }
 
+function strengthReferenceBlock(u) {
+  const spec = u.exercises && u.exercises.length
+    ? `<div class="exercise-list">${u.exercises.map(e => `
+        <div class="exercise-row">
+          <span class="exercise-name">${escapeHtml(e.name)}</span>
+          <span class="exercise-spec">${e.sets}×${e.reps} · ${escapeHtml(e.rest)} Pause</span>
+        </div>`).join("")}</div>`
+    : `<div class="unit-detail">${escapeHtml(u.detail)}</div>`;
+  return `
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title" style="text-transform:none; font-size:15px;">${escapeHtml(u.name)}</span>
+        <span class="card-note">${u.plannedDurationMin ? `~${u.plannedDurationMin} min` : ""}</span>
+      </div>
+      ${spec}
+    </div>`;
+}
+
 function renderKraft(data) {
   const isStrength = (u) => u.type === "kraft" || u.type === "emom";
   const todayEntry = data.week.days.find(d => d.date === data.today.date);
@@ -1033,6 +1051,20 @@ function renderKraft(data) {
       </div>`;
   }).join("");
 
+  const seenNames = new Set();
+  const referenceUnits = [];
+  data.week.days.forEach(d => {
+    d.units.filter(u => u.type === "kraft").forEach(u => {
+      if (!seenNames.has(u.name)) { seenNames.add(u.name); referenceUnits.push(u); }
+    });
+  });
+  const referenceCard = `
+    <div>
+      <div class="card-title" style="margin-bottom:10px;">Allgemeiner Plan</div>
+      <div class="card-note" style="margin-bottom:10px;">Deine Kraft-Übungen unabhängig vom Wochentag, zum Nachschlagen</div>
+      <div class="stack">${referenceUnits.map(strengthReferenceBlock).join("")}</div>
+    </div>`;
+
   document.getElementById("tab-kraft").innerHTML = `
     <div class="page-head">
       <div class="page-eyebrow">Kraft</div>
@@ -1046,6 +1078,7 @@ function renderKraft(data) {
         <div class="card-head"><span class="card-title">Diese Woche</span></div>
         <div class="week-grid">${weekDays}</div>
       </div>
+      ${referenceCard}
     </div>`;
 }
 
