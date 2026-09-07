@@ -86,9 +86,11 @@ function showSignupForm(overlay) {
   card.querySelector("#signup-back").addEventListener("click", () => showLoginOverlay(CURRENT_AUTH_CONFIG, window.__basisLoginSuccess, overlay));
 
   card.querySelector("#signup-submit").addEventListener("click", async () => {
+    const submitBtn = card.querySelector("#signup-submit");
     const username = card.querySelector("#signup-user").value.trim().toLowerCase();
     const password = card.querySelector("#signup-pw").value;
     const errorEl = card.querySelector("#signup-error");
+    errorEl.style.color = "";
     if (!/^[a-z0-9_-]{2,24}$/.test(username)) {
       errorEl.textContent = "Benutzername: 2–24 Zeichen, nur a-z, 0-9, - und _.";
       return;
@@ -97,13 +99,24 @@ function showSignupForm(overlay) {
       errorEl.textContent = "Passwort braucht mindestens 6 Zeichen.";
       return;
     }
-    const credentialSecret = await sha256Hex(`${username}:${password}`);
-    const title = `Login-Anfrage: ${username}`;
-    const body = `Benutzername: ${username}\nCredential (kein Passwort, sicher öffentlich): ${credentialSecret}`;
-    const url = `https://github.com/${GITHUB_REPO}/issues/new?` + new URLSearchParams({ title, body, labels: "login-request" }).toString();
-    window.open(url, "_blank");
-    errorEl.style.color = "var(--teal)";
-    errorEl.textContent = "Anfrage-Fenster geöffnet – dort noch auf GitHub absenden. Der Owner schaltet dich danach frei.";
+    submitBtn.disabled = true;
+    errorEl.textContent = "Anfrage wird gesendet…";
+    try {
+      const credentialSecret = await sha256Hex(`${username}:${password}`);
+      const res = await fetch(HOSTED_SYNC_WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request-login", username, credential: credentialSecret }),
+      });
+      const result = await res.json();
+      if (!result.ok) throw new Error(result.error || "Unbekannter Fehler");
+      errorEl.style.color = "var(--teal)";
+      errorEl.textContent = "Anfrage gesendet – der Owner schaltet dich frei, kein weiterer Schritt nötig.";
+    } catch (err) {
+      errorEl.textContent = `Fehler: ${err.message || err}`;
+    } finally {
+      submitBtn.disabled = false;
+    }
   });
 }
 
