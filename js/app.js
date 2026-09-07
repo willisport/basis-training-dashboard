@@ -1340,7 +1340,8 @@ function renderLogins() {
               <div class="day-mini-unit">
                 <span style="flex:1;">${escapeHtml(u.username)}</span>
                 <span class="tag ${u.role === "owner" ? "pflicht" : "ergaenzung"}">${u.role === "owner" ? "Owner" : "viewer"}</span>
-                <button class="btn-small revoke-user-btn" type="button" data-username="${escapeHtml(u.username)}" style="padding:4px 10px; font-size:11px; margin-left:8px;">Entfernen</button>
+                <button class="btn-small logout-user-btn" type="button" data-username="${escapeHtml(u.username)}" style="padding:4px 10px; font-size:11px; margin-left:8px; background:var(--amber, #c07a1e); color:#fff;">Abmelden</button>
+                <button class="btn-small revoke-user-btn" type="button" data-username="${escapeHtml(u.username)}" style="padding:4px 10px; font-size:11px; margin-left:6px; background:#c0392b; color:#fff;">Blockieren</button>
               </div>`).join("")}
              <div class="card-note revoke-status" style="margin-top:4px;"></div>`
           : `<div class="card-note">Noch niemand freigeschaltet.</div>`}
@@ -1373,8 +1374,14 @@ function renderLogins() {
   panel.querySelectorAll(".revoke-user-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const username = btn.dataset.username;
-      if (!window.confirm(`"${username}" wirklich entfernen? Kann sich danach nicht mehr einloggen.`)) return;
+      if (!window.confirm(`"${username}" wirklich blockieren? Kann sich danach nie wieder einloggen (nur per neuer Anfrage).`)) return;
       revokeUser(username, revokeStatusEl, btn);
+    });
+  });
+  panel.querySelectorAll(".logout-user-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const username = btn.dataset.username;
+      logoutUser(username, revokeStatusEl, btn);
     });
   });
 
@@ -1414,6 +1421,30 @@ async function revokeUser(username, statusEl, btn) {
     if (statusEl) statusEl.textContent = `Dauert länger als erwartet – Seite in Kürze neu laden.`;
   } catch (err) {
     if (statusEl) { statusEl.style.color = "var(--amber, orange)"; statusEl.textContent = `Fehler: ${err.message || err}`; }
+    btn.disabled = false;
+  }
+}
+
+async function logoutUser(username, statusEl, btn) {
+  const adminKey = getAdminKey();
+  if (!adminKey) {
+    if (statusEl) { statusEl.style.color = "var(--amber, orange)"; statusEl.textContent = "Erst oben den Freischalt-Code eingeben und speichern."; }
+    return;
+  }
+  btn.disabled = true;
+  if (statusEl) { statusEl.style.color = ""; statusEl.textContent = `Melde "${username}" ab…`; }
+  try {
+    const res = await fetch(HOSTED_SYNC_WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "logout-login", username, adminKey }),
+    });
+    const result = await res.json();
+    if (!result.ok) throw new Error(result.error || "Unbekannter Fehler");
+    if (statusEl) { statusEl.style.color = "var(--teal)"; statusEl.textContent = `"${username}" wird beim nächsten Laden der Seite abgemeldet (Passwort bleibt gültig).`; }
+  } catch (err) {
+    if (statusEl) { statusEl.style.color = "var(--amber, orange)"; statusEl.textContent = `Fehler: ${err.message || err}`; }
+  } finally {
     btn.disabled = false;
   }
 }

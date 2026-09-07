@@ -58,9 +58,11 @@ async function decryptDataFile(dekRawBytes, encFile) {
   return JSON.parse(new TextDecoder().decode(plainBuf));
 }
 
-function saveSession(dekRawBytes, role, username) {
+function saveSession(dekRawBytes, role, username, sessionVersion) {
   try {
-    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ dek: bytesToB64(dekRawBytes), role, username: username || "" }));
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
+      dek: bytesToB64(dekRawBytes), role, username: username || "", sessionVersion: sessionVersion || 0,
+    }));
   } catch { /* ignore */ }
 }
 function loadSession() {
@@ -152,7 +154,7 @@ function showLoginOverlay(authConfig, onSuccess, existingOverlay) {
     errorEl.textContent = "";
     const iterations = authConfig.kdf.iterations;
 
-    let dek = null, role = null;
+    let dek = null, role = null, sessionVersion = 0;
 
     if (username) {
       const entry = (authConfig.users || {})[username];
@@ -160,6 +162,7 @@ function showLoginOverlay(authConfig, onSuccess, existingOverlay) {
         const credentialSecret = await sha256Hex(`${username}:${password}`);
         dek = await tryUnwrapDek(credentialSecret, entry, iterations);
         role = entry.role || "viewer";
+        sessionVersion = entry.sessionVersion || 0;
       }
     } else {
       dek = await tryUnwrapDek(password, authConfig.owner, iterations);
@@ -177,7 +180,7 @@ function showLoginOverlay(authConfig, onSuccess, existingOverlay) {
       return;
     }
 
-    saveSession(dek, role, username);
+    saveSession(dek, role, username, sessionVersion);
     overlay.remove();
     onSuccess(dek, role, username);
   };
@@ -328,7 +331,15 @@ async function bootWithAuth(onData) {
 
   const session = loadSession();
   if (session && session.dek) {
-    await loadEncryptedAndRender(b64ToBytes(session.dek), session.role, session.username);
+    if (session.username) {
+      const entry = (authConfig.users || {})[session.username];
+      const stillValid = entry && (entry.sessionVersion || 0) === (session.sessionVersion || 0);
+      if (!stillValid) clearSession();
+    }
+  }
+  const validSession = loadSession();
+  if (validSession && validSession.dek) {
+    await loadEncryptedAndRender(b64ToBytes(validSession.dek), validSession.role, validSession.username);
     return;
   }
 
