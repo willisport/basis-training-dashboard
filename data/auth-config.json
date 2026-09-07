@@ -1,0 +1,16 @@
+{
+  "kdf": {
+    "iterations": 210000,
+    "hash": "SHA-256"
+  },
+  "owner": {
+    "salt": "i4E3Lmlh80o8+9sSidCWrg==",
+    "iv": "la22bAkZ+vUKQDAL",
+    "wrappedKey": "6v2fsh+oplr4CF0k49swBsJnNCjrkaeT2GQPqPh5ANNJDhefop1XA3ft1lEjhC/p"
+  },
+  "viewer": {
+    "salt": "hEs6VLwDTY8klkfodb8L4g==",
+    "iv": "vZJxcD78NRr/fg3S",
+    "wrappedKey": "B1ygv9YWyNEUfP/tL+L8ntz0WuHrQcGAcghhAKk77p/cgQnOBEqp1r0CGjTJumcT"
+  }
+}
