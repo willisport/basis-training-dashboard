@@ -1,11 +1,13 @@
 /* Basis · Login & Entschlüsselung für die gehostete (GitHub-Pages-)Version.
    Lokal ohne data/auth-config.json bleibt alles wie bisher, ohne Login. */
 
-const AUTH_SESSION_KEY = "basisAuthSession_v1";
+const AUTH_SESSION_KEY = "basisAuthSession_v2";
 const GITHUB_REPO = "willisport/willisport.github.io";
 
 let CURRENT_ROLE = "owner";
+let CURRENT_USERNAME = "";
 let IS_HOSTED = false;
+let CURRENT_AUTH_CONFIG = null;
 
 function b64ToBytes(b64) {
   const bin = atob(b64);
@@ -17,6 +19,11 @@ function bytesToB64(bytes) {
   let bin = "";
   bytes.forEach(b => { bin += String.fromCharCode(b); });
   return btoa(bin);
+}
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function deriveAesKey(password, saltB64, iterations) {
@@ -49,9 +56,9 @@ async function decryptDataFile(dekRawBytes, encFile) {
   return JSON.parse(new TextDecoder().decode(plainBuf));
 }
 
-function saveSession(dekRawBytes, role) {
+function saveSession(dekRawBytes, role, username) {
   try {
-    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ dek: bytesToB64(dekRawBytes), role }));
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ dek: bytesToB64(dekRawBytes), role, username: username || "" }));
   } catch { /* ignore */ }
 }
 function loadSession() {
@@ -62,48 +69,102 @@ function clearSession() {
   try { localStorage.removeItem(AUTH_SESSION_KEY); } catch { /* ignore */ }
 }
 
-function showLoginOverlay(authConfig, onSuccess) {
-  const overlay = document.createElement("div");
+function showSignupForm(overlay) {
+  const card = overlay.querySelector(".login-card");
+  card.innerHTML = `
+    <div class="login-brand">B</div>
+    <div class="login-title">Login erstellen</div>
+    <div class="login-sub">Wird als Anfrage an den Owner geschickt (GitHub-Account nötig zum Absenden). Dein Passwort verlässt nie diesen Browser im Klartext.</div>
+    <input type="text" id="signup-user" class="login-input" placeholder="Benutzername (z. B. henning)" autofocus />
+    <input type="password" id="signup-pw" class="login-input" placeholder="Passwort (dein eigenes, merken!)" style="margin-top:10px;" />
+    <button id="signup-submit" class="login-submit-btn" style="margin-top:10px;">Anfrage senden</button>
+    <div class="login-error" id="signup-error"></div>
+    <div class="login-sub" id="signup-back" style="margin-top:14px; cursor:pointer; text-decoration:underline;">Zurück zum Login</div>`;
+
+  card.querySelector("#signup-back").addEventListener("click", () => showLoginOverlay(CURRENT_AUTH_CONFIG, window.__basisLoginSuccess, overlay));
+
+  card.querySelector("#signup-submit").addEventListener("click", async () => {
+    const username = card.querySelector("#signup-user").value.trim().toLowerCase();
+    const password = card.querySelector("#signup-pw").value;
+    const errorEl = card.querySelector("#signup-error");
+    if (!/^[a-z0-9_-]{2,24}$/.test(username)) {
+      errorEl.textContent = "Benutzername: 2–24 Zeichen, nur a-z, 0-9, - und _.";
+      return;
+    }
+    if (!password || password.length < 6) {
+      errorEl.textContent = "Passwort braucht mindestens 6 Zeichen.";
+      return;
+    }
+    const credentialSecret = await sha256Hex(`${username}:${password}`);
+    const title = `Login-Anfrage: ${username}`;
+    const body = `Benutzername: ${username}\nCredential (kein Passwort, sicher öffentlich): ${credentialSecret}`;
+    const url = `https://github.com/${GITHUB_REPO}/issues/new?` + new URLSearchParams({ title, body, labels: "login-request" }).toString();
+    window.open(url, "_blank");
+    errorEl.style.color = "var(--teal)";
+    errorEl.textContent = "Anfrage-Fenster geöffnet – dort noch auf GitHub absenden. Der Owner schaltet dich danach frei.";
+  });
+}
+
+function showLoginOverlay(authConfig, onSuccess, existingOverlay) {
+  window.__basisLoginSuccess = onSuccess;
+  const overlay = existingOverlay || document.createElement("div");
   overlay.className = "login-overlay";
   overlay.innerHTML = `
     <div class="login-card">
       <div class="login-brand">B</div>
       <div class="login-title">Basis</div>
       <div class="login-sub">Passwort eingeben, um dein Trainings-Dashboard zu entschlüsseln.</div>
-      <input type="password" id="login-pw" class="login-input" placeholder="Passwort" autofocus />
-      <button id="login-submit" class="login-submit-btn">Entsperren</button>
+      <input type="text" id="login-user" class="login-input" placeholder="Benutzername (nur für persönlichen Login)" />
+      <input type="password" id="login-pw" class="login-input" placeholder="Passwort" style="margin-top:10px;" autofocus />
+      <button id="login-submit" class="login-submit-btn" style="margin-top:10px;">Entsperren</button>
       <div class="login-error" id="login-error"></div>
+      <div class="login-sub" id="login-signup-link" style="margin-top:14px; cursor:pointer; text-decoration:underline;">Noch keinen Login? Login erstellen</div>
     </div>`;
-  document.body.appendChild(overlay);
+  if (!existingOverlay) document.body.appendChild(overlay);
 
+  const userInput = overlay.querySelector("#login-user");
   const pwInput = overlay.querySelector("#login-pw");
   const btn = overlay.querySelector("#login-submit");
   const errorEl = overlay.querySelector("#login-error");
 
+  overlay.querySelector("#login-signup-link").addEventListener("click", () => showSignupForm(overlay));
+
   const attempt = async () => {
+    const username = userInput.value.trim().toLowerCase();
     const password = pwInput.value;
     if (!password) return;
     btn.disabled = true;
     errorEl.textContent = "";
     const iterations = authConfig.kdf.iterations;
 
-    let dek = await tryUnwrapDek(password, authConfig.owner, iterations);
-    let role = "owner";
-    if (!dek) {
-      dek = await tryUnwrapDek(password, authConfig.viewer, iterations);
-      role = "viewer";
+    let dek = null, role = null;
+
+    if (username) {
+      const entry = (authConfig.users || {})[username];
+      if (entry) {
+        const credentialSecret = await sha256Hex(`${username}:${password}`);
+        dek = await tryUnwrapDek(credentialSecret, entry, iterations);
+        role = entry.role || "viewer";
+      }
+    } else {
+      dek = await tryUnwrapDek(password, authConfig.owner, iterations);
+      role = "owner";
+      if (!dek) {
+        dek = await tryUnwrapDek(password, authConfig.viewer, iterations);
+        role = "viewer";
+      }
     }
 
     if (!dek) {
-      errorEl.textContent = "Falsches Passwort.";
+      errorEl.textContent = "Falsches Passwort oder unbekannter Benutzername.";
       btn.disabled = false;
       pwInput.select();
       return;
     }
 
-    saveSession(dek, role);
+    saveSession(dek, role, username);
     overlay.remove();
-    onSuccess(dek, role);
+    onSuccess(dek, role, username);
   };
 
   btn.addEventListener("click", attempt);
@@ -113,7 +174,7 @@ function showLoginOverlay(authConfig, onSuccess) {
 function showSyncStatus(syncedAtIso) {
   const el = document.getElementById("sync-status");
   if (!el) return;
-  let label = "Automatisch synchronisiert (alle 30 Min)";
+  let label = "Automatisch synchronisiert (alle 10 Min)";
   if (syncedAtIso) {
     const d = new Date(syncedAtIso);
     if (!Number.isNaN(d.getTime())) {
@@ -131,7 +192,8 @@ function setupLogoutControl() {
   const el = document.getElementById("role-chip");
   if (!el) return;
   el.hidden = false;
-  el.textContent = CURRENT_ROLE === "owner" ? "Owner · abmelden" : "Viewer · abmelden";
+  const label = CURRENT_USERNAME ? CURRENT_USERNAME : (CURRENT_ROLE === "owner" ? "Owner" : "Viewer");
+  el.textContent = `${label} · abmelden`;
   el.addEventListener("click", () => {
     clearSession();
     location.reload();
@@ -145,6 +207,11 @@ function setupHostedSyncButton() {
   btn.addEventListener("click", () => {
     window.open(`https://github.com/${GITHUB_REPO}/actions/workflows/sync.yml`, "_blank");
   });
+}
+
+function setupLoginsNavItem() {
+  if (CURRENT_ROLE !== "owner") return;
+  document.querySelectorAll('[data-tab="logins"]').forEach(el => { el.hidden = false; });
 }
 
 /**
@@ -166,7 +233,7 @@ async function bootWithAuth(onData) {
     CURRENT_ROLE = "owner";
     fetch("data/training-data.json")
       .then(r => r.json())
-      .then(onData)
+      .then(data => { onData(data); setupLoginsNavItem(); })
       .catch(err => {
         document.getElementById("tab-heute").innerHTML =
           `<div class="card accent-amber"><b>Konnte Trainingsdaten nicht laden.</b><br>${err}<br><br>Läuft die Seite über einen lokalen Server (nicht direkt als Datei geöffnet)?</div>`;
@@ -175,10 +242,12 @@ async function bootWithAuth(onData) {
   }
 
   IS_HOSTED = true;
+  CURRENT_AUTH_CONFIG = authConfig;
   document.body.classList.add("is-hosted");
 
-  const loadEncryptedAndRender = async (dekRawBytes, role) => {
+  const loadEncryptedAndRender = async (dekRawBytes, role, username) => {
     CURRENT_ROLE = role;
+    CURRENT_USERNAME = username || "";
     document.body.classList.toggle("is-viewer", role === "viewer");
     try {
       const encFile = await fetch("data/training-data.enc.json", { cache: "no-store" }).then(r => r.json());
@@ -186,6 +255,7 @@ async function bootWithAuth(onData) {
       onData(data);
       setupLogoutControl();
       setupHostedSyncButton();
+      setupLoginsNavItem();
       showSyncStatus(data.syncedAt);
     } catch (err) {
       document.getElementById("tab-heute").innerHTML =
@@ -195,7 +265,7 @@ async function bootWithAuth(onData) {
 
   const session = loadSession();
   if (session && session.dek) {
-    await loadEncryptedAndRender(b64ToBytes(session.dek), session.role);
+    await loadEncryptedAndRender(b64ToBytes(session.dek), session.role, session.username);
     return;
   }
 

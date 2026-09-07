@@ -402,6 +402,18 @@ function setupTabs() {
 
 function setupInteractions() {
   document.body.addEventListener("click", (e) => {
+    const copyBtn = e.target.closest(".copy-cmd-btn");
+    if (copyBtn) {
+      const restore = copyBtn.textContent;
+      const done = () => { copyBtn.textContent = "Kopiert!"; setTimeout(() => { copyBtn.textContent = restore; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(copyBtn.dataset.cmd).then(done).catch(done);
+      } else {
+        done();
+      }
+      return;
+    }
+
     if (typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE === "viewer") return;
 
     const autoBtn = e.target.closest(".auto-move-btn");
@@ -1179,6 +1191,103 @@ function renderPlanaenderungen() {
   }
 }
 
+/* ---------- render: Logins (nur Owner) ---------- */
+
+let LOGIN_REQUESTS_CACHE = null;
+
+async function fetchLoginRequests() {
+  const repo = typeof GITHUB_REPO !== "undefined" ? GITHUB_REPO : null;
+  if (!repo) return { error: "Kein Repository konfiguriert." };
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/issues?labels=login-request&state=open&per_page=20`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) throw new Error(`GitHub antwortete mit ${res.status}`);
+    return { items: await res.json() };
+  } catch (err) {
+    return { error: String(err.message || err) };
+  }
+}
+
+function parseLoginRequestBody(issue) {
+  const body = issue.body || "";
+  const userMatch = body.match(/Benutzername:\s*(\S+)/i);
+  const credMatch = body.match(/Credential[^:]*:\s*([0-9a-f]{16,})/i);
+  return {
+    username: userMatch ? userMatch[1] : issue.title.replace(/^Login-Anfrage:\s*/i, "").trim(),
+    credential: credMatch ? credMatch[1] : null,
+  };
+}
+
+function loginRequestItemHtml(issue) {
+  const { username, credential } = parseLoginRequestBody(issue);
+  const command = credential ? `python approve_login.py ${username} ${credential}` : null;
+  return `
+    <div class="qa-item">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span class="qa-question">${escapeHtml(username)}</span>
+        <a href="${issue.html_url}" target="_blank" rel="noopener" class="tag ergaenzung" style="text-decoration:none;">Issue</a>
+      </div>
+      ${command
+        ? `<div class="card-note" style="margin:8px 0 4px;">Lokal im sync-Ordner ausführen, dann committen &amp; pushen:</div>
+           <div class="exercise-row">
+             <span class="exercise-name" style="font-family:var(--font-display); font-size:11.5px; word-break:break-all;">${escapeHtml(command)}</span>
+             <button class="btn-small copy-cmd-btn" type="button" data-cmd="${escapeHtml(command)}" style="padding:6px 10px; font-size:11px;">Kopieren</button>
+           </div>`
+        : `<div class="card-note" style="margin-top:6px; color:var(--amber);">Konnte Credential nicht aus dem Issue lesen – bitte Issue manuell öffnen und prüfen.</div>`}
+    </div>`;
+}
+
+function renderLoginRequestsList(result) {
+  const list = document.getElementById("login-requests-list");
+  if (!list) return;
+  if (result.error) {
+    list.innerHTML = `<div class="card-note">Konnte Anfragen nicht laden: ${escapeHtml(result.error)}</div>`;
+    return;
+  }
+  if (!result.items.length) {
+    list.innerHTML = `<div class="card-note">Keine offenen Anfragen.</div>`;
+    return;
+  }
+  list.innerHTML = result.items.map(loginRequestItemHtml).join("");
+}
+
+function renderLogins() {
+  const panel = document.getElementById("tab-logins");
+  if (!panel) return;
+  if (typeof CURRENT_ROLE !== "undefined" && CURRENT_ROLE !== "owner") { panel.innerHTML = ""; return; }
+
+  const approvedUsers = Object.keys((typeof CURRENT_AUTH_CONFIG !== "undefined" && CURRENT_AUTH_CONFIG && CURRENT_AUTH_CONFIG.users) || {});
+
+  panel.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Logins</div>
+      <div class="page-title">Zugänge verwalten</div>
+      <div class="page-sub">Nur für dich als Owner sichtbar</div>
+    </div>
+
+    <div class="stack">
+      <div class="card">
+        <div class="card-head"><span class="card-title">Offene Login-Anfragen</span><span class="card-note"><span id="logins-refresh" style="cursor:pointer; text-decoration:underline;">aktualisieren</span></span></div>
+        <div id="login-requests-list" class="stack" style="gap:8px;"><div class="card-note">Lade…</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="card-title">Freigeschaltete Logins</span></div>
+        ${approvedUsers.length
+          ? `<div class="stack" style="gap:6px;">${approvedUsers.map(u => `<div class="day-mini-unit"><span style="flex:1;">${escapeHtml(u)}</span><span class="tag ergaenzung">viewer</span></div>`).join("")}</div>`
+          : `<div class="card-note">Noch niemand freigeschaltet.</div>`}
+      </div>
+    </div>`;
+
+  const refreshEl = document.getElementById("logins-refresh");
+  const loadAndRender = () => fetchLoginRequests().then(result => { LOGIN_REQUESTS_CACHE = result; renderLoginRequestsList(result); });
+  if (refreshEl) refreshEl.addEventListener("click", loadAndRender);
+
+  if (LOGIN_REQUESTS_CACHE) renderLoginRequestsList(LOGIN_REQUESTS_CACHE);
+  else loadAndRender();
+}
+
 /* ---------- boot ---------- */
 
 let PRISTINE_DATA = null;
@@ -1197,6 +1306,7 @@ function renderAll(freshData) {
   renderCoach(data);
   renderKraft(data);
   renderPlanaenderungen(data);
+  renderLogins();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
