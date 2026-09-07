@@ -13,5 +13,12 @@
     "iv": "vZJxcD78NRr/fg3S",
     "wrappedKey": "B1ygv9YWyNEUfP/tL+L8ntz0WuHrQcGAcghhAKk77p/cgQnOBEqp1r0CGjTJumcT"
   },
-  "users": {}
+  "users": {
+    "willi": {
+      "salt": "kHvw/BG3DmdqqMC0s5MRmg==",
+      "iv": "EkVDIBFXOPQ7TT0z",
+      "wrappedKey": "0KUk+iytGgu3PQbfuEOSZIfHS8btQ1mJA80MUIIm6TjGVGvsKyNhm68OV4csLkVY",
+      "role": "owner"
+    }
+  }
 }
