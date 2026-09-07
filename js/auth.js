@@ -221,7 +221,7 @@ function setupLogoutControl() {
 function setupHostedSyncButton(onData) {
   const btn = document.getElementById("hosted-sync-btn");
   const panel = document.getElementById("sync-panel");
-  if (!btn || CURRENT_ROLE !== "owner") return;
+  if (!btn) return;
   btn.hidden = false;
 
   btn.addEventListener("click", async () => {
