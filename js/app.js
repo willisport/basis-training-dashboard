@@ -1200,15 +1200,7 @@ function getAdminKey() {
   try { return localStorage.getItem(ADMIN_KEY_STORAGE) || ""; } catch { return ""; }
 }
 function setAdminKey(key) {
-  try { localStorage.setItem(ADMIN_KEY_STORAGE, key); } catch { /* ignore */ }
-}
-function ensureAdminKey() {
-  let key = getAdminKey();
-  if (!key) {
-    key = window.prompt("Freischalt-Code eingeben (einmalig, wird hier im Browser gespeichert):") || "";
-    if (key) setAdminKey(key);
-  }
-  return key;
+  try { localStorage.setItem(ADMIN_KEY_STORAGE, key.trim()); } catch { /* ignore */ }
 }
 
 async function fetchLoginRequests() {
@@ -1259,8 +1251,12 @@ function loginRequestItemHtml(issue) {
 }
 
 async function approveLoginRequest(issueNumber, statusEl, btn) {
-  const adminKey = ensureAdminKey();
-  if (!adminKey) return;
+  const adminKey = getAdminKey();
+  if (!adminKey) {
+    statusEl.style.color = "var(--amber, orange)";
+    statusEl.textContent = "Erst oben den Freischalt-Code eingeben und speichern.";
+    return;
+  }
   btn.disabled = true;
   statusEl.textContent = "Wird freigeschaltet…";
   statusEl.style.color = "";
@@ -1314,12 +1310,22 @@ function renderLogins() {
     <div class="stack">
       <div class="card">
         <div class="card-head">
+          <span class="card-title">Freischalt-Code</span>
+          <span class="card-note">Schützt "Freischalten" unten – nur du kennst ihn</span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="password" id="admin-key-field" class="login-input" style="max-width:260px;"
+            autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"
+            placeholder="Freischalt-Code" value="${escapeHtml(getAdminKey())}" />
+          <button id="admin-key-save" class="btn-small" type="button" style="padding:8px 14px;">Speichern</button>
+          <span id="admin-key-status" class="card-note"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
           <span class="card-title">Offene Login-Anfragen</span>
-          <span class="card-note">
-            <span id="logins-change-code" style="cursor:pointer; text-decoration:underline;">Freischalt-Code ändern</span>
-            &nbsp;·&nbsp;
-            <span id="logins-refresh" style="cursor:pointer; text-decoration:underline;">aktualisieren</span>
-          </span>
+          <span class="card-note"><span id="logins-refresh" style="cursor:pointer; text-decoration:underline;">aktualisieren</span></span>
         </div>
         <div id="login-requests-list" class="stack" style="gap:8px;"><div class="card-note">Lade…</div></div>
       </div>
@@ -1336,10 +1342,14 @@ function renderLogins() {
   const loadAndRender = () => fetchLoginRequests().then(result => { LOGIN_REQUESTS_CACHE = result; renderLoginRequestsList(result); });
   if (refreshEl) refreshEl.addEventListener("click", loadAndRender);
 
-  const changeCodeEl = document.getElementById("logins-change-code");
-  if (changeCodeEl) changeCodeEl.addEventListener("click", () => {
-    const key = window.prompt("Neuen Freischalt-Code eingeben:");
-    if (key) setAdminKey(key);
+  const adminKeyField = document.getElementById("admin-key-field");
+  const adminKeySave = document.getElementById("admin-key-save");
+  const adminKeyStatus = document.getElementById("admin-key-status");
+  if (adminKeySave) adminKeySave.addEventListener("click", () => {
+    setAdminKey(adminKeyField.value);
+    adminKeyStatus.style.color = "var(--teal)";
+    adminKeyStatus.textContent = "Gespeichert.";
+    setTimeout(() => { adminKeyStatus.textContent = ""; }, 3000);
   });
 
   const listEl = document.getElementById("login-requests-list");
