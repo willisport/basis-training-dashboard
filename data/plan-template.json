@@ -43,15 +43,16 @@
       "focus": "Rad Zone 2 + Core + EMOM",
       "units": [
         { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "60 min", "plannedDurationMin": 60, "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
-        { "name": "Core", "type": "core", "tag": "ergaenzung", "detail": "10 min", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } },
+        { "name": "Core", "type": "core", "tag": "ergaenzung", "detail": "15 min", "plannedDurationMin": 15, "matchHint": { "activityTypes": ["strength_training", "cardio"] } },
         { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "10 min: jede Minute 10 Klimmzüge + 10 Dips", "planLabel": "Plan 2", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
       ]
     },
     {
       "weekday": "Mittwoch",
-      "focus": "Langer Lauf – Fokustag",
+      "focus": "Langer Lauf + Rad Zone 2 – Fokustag",
       "units": [
-        { "name": "Langer Lauf", "type": "lauf", "tag": "pflicht", "detail": "15 km · Zone 2 (130–140 bpm)", "plannedDurationMin": 90, "keySession": true, "matchHint": { "activityTypes": ["running"], "minDistanceKm": 12 } },
+        { "name": "Langer Lauf", "type": "lauf", "tag": "pflicht", "detail": "8 km · Zone 2 (130–140 bpm)", "plannedDurationMin": 50, "keySession": true, "matchHint": { "activityTypes": ["running"], "minDistanceKm": 6 } },
+        { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "60 min", "plannedDurationMin": 60, "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
         { "name": "Bein-Stabi", "type": "kraft", "tag": "ergaenzung", "detail": "Einbeinstand, Copenhagen Plank, Ausfallschritte, seitliches Beinheben · 3×10–12 Wdh. pro Seite, direkt im Anschluss", "plannedDurationMin": 20, "exercises": [
           { "name": "Einbeinstand", "sets": 3, "reps": "30–45 s", "rest": "30 s" },
           { "name": "Copenhagen Plank", "sets": 3, "reps": "20–30 s pro Seite", "rest": "30 s" },
@@ -74,7 +75,7 @@
           { "name": "Bizepscurls", "sets": 3, "reps": "10–12", "rest": "60 s" },
           { "name": "Trizepsdrücken", "sets": 3, "reps": "10–12", "rest": "60 s" }
         ], "matchHint": { "activityTypes": ["strength_training"] } },
-        { "name": "Core", "type": "core", "tag": "bonus", "detail": "10 min", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
+        { "name": "Core", "type": "core", "tag": "bonus", "detail": "15 min", "plannedDurationMin": 15, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
       ]
     },
     {
@@ -92,7 +93,7 @@
       "focus": "Rad Zone 2 + Core",
       "units": [
         { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "", "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
-        { "name": "Core", "type": "core", "tag": "ergaenzung", "detail": "10 min", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } },
+        { "name": "Core", "type": "core", "tag": "ergaenzung", "detail": "15 min", "plannedDurationMin": 15, "matchHint": { "activityTypes": ["strength_training", "cardio"] } },
         { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "10 min: jede Minute 10 Klimmzüge + 15 Liegestütze", "planLabel": "Plan 1", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
       ]
     },
