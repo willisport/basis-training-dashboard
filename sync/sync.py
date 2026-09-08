@@ -54,6 +54,11 @@ def cleanup_stale_requests(this_monday: datetime) -> None:
         "Accept": "application/vnd.github+json",
         "User-Agent": "willis-dashboard-sync",
     }
+    # this_monday traegt noch die aktuelle Uhrzeit von datetime.now() in sich - auf
+    # Mitternacht kappen, sonst wirkt ein Issue von heute frueh faelschlich "aelter"
+    # als der Vergleichswert und wird sofort zugemacht (realer Vorfall, siehe git log).
+    monday_date = datetime(this_monday.year, this_monday.month, this_monday.day)
+
     list_url = f"https://api.github.com/repos/{GITHUB_REPO_FULL}/issues?labels=anfrage&state=open&per_page=100"
     try:
         with urllib.request.urlopen(urllib.request.Request(list_url, headers=headers), timeout=15) as resp:
@@ -67,11 +72,11 @@ def cleanup_stale_requests(this_monday: datetime) -> None:
         if not created_at:
             continue
         created_date = datetime.strptime(created_at[:10], "%Y-%m-%d")
-        if created_date >= this_monday:
+        if created_date >= monday_date:
             continue  # gehoert zur aktuellen Woche, nicht anfassen
 
         text = f"{issue.get('title', '')} {issue.get('body', '') or ''}"
-        created_last_week = created_date >= this_monday - timedelta(days=7)
+        created_last_week = created_date >= monday_date - timedelta(days=7)
         if created_last_week and NEXT_WEEK_PATTERN.search(text):
             continue  # Gnadenwoche
 
