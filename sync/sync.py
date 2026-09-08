@@ -12,7 +12,10 @@ beibehalten.
 
 import json
 import os
+import re
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -33,6 +36,56 @@ ENCRYPTED_OUTPUT_PATH = ROOT / "data" / "training-data.enc.json"
 
 WINDOW_WEEKS = 9  # 8 Wochen Performance-Verlauf + aktuelle Woche
 MACRO_GOAL_DATE = datetime(2027, 8, 31)  # Zielmonat des Ultramarathons - Makro-Uebersicht laeuft bis hierhin
+GITHUB_REPO_FULL = "willisport/willisport.github.io"
+NEXT_WEEK_PATTERN = re.compile(r"n[aä]chste[nrm]?\s*woche", re.IGNORECASE)
+
+
+def cleanup_stale_requests(this_monday: datetime) -> None:
+    """Schliesst automatisch alte offene 'anfrage'-Issues aus vergangenen Wochen.
+    Erwaehnt eine Anfrage "naechste Woche", bekommt sie eine Gnadenwoche (bleibt
+    offen, bis diese naechste Woche selbst zur aktuellen wird) und wird erst danach
+    mit aufgeraeumt - so verschwindet z. B. "naechste Woche Dienstag laufen?" nicht,
+    bevor diese Woche ueberhaupt angefangen hat."""
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "willis-dashboard-sync",
+    }
+    list_url = f"https://api.github.com/repos/{GITHUB_REPO_FULL}/issues?labels=anfrage&state=open&per_page=100"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(list_url, headers=headers), timeout=15) as resp:
+            issues = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        print(f"  [warn] Anfragen-Aufraeumen: Issues konnten nicht geladen werden: {e}")
+        return
+
+    for issue in issues:
+        created_at = issue.get("created_at")
+        if not created_at:
+            continue
+        created_date = datetime.strptime(created_at[:10], "%Y-%m-%d")
+        if created_date >= this_monday:
+            continue  # gehoert zur aktuellen Woche, nicht anfassen
+
+        text = f"{issue.get('title', '')} {issue.get('body', '') or ''}"
+        created_last_week = created_date >= this_monday - timedelta(days=7)
+        if created_last_week and NEXT_WEEK_PATTERN.search(text):
+            continue  # Gnadenwoche
+
+        number = issue.get("number")
+        close_url = f"https://api.github.com/repos/{GITHUB_REPO_FULL}/issues/{number}"
+        try:
+            close_req = urllib.request.Request(
+                close_url, method="PATCH", headers=headers,
+                data=json.dumps({"state": "closed"}).encode("utf-8"),
+            )
+            urllib.request.urlopen(close_req, timeout=15)
+            print(f"  Anfrage #{number} automatisch geschlossen (alte Woche)")
+        except Exception as e:
+            print(f"  [warn] Anfrage #{number} konnte nicht geschlossen werden: {e}")
 
 
 def load_json(path: Path) -> dict:
@@ -211,6 +264,11 @@ def main():
     today = datetime.now()
     this_monday = monday_of(today)
     window_start = this_monday - timedelta(weeks=WINDOW_WEEKS - 1)
+
+    try:
+        cleanup_stale_requests(this_monday)
+    except Exception as e:
+        print(f"  [warn] Anfragen-Aufraeumen uebersprungen: {e}")
 
     # --- Garmin (einzige Aktivitaetsquelle + Gesundheitsdaten) ---
     try:

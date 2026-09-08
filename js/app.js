@@ -149,6 +149,20 @@ function setMoveOverride(weekStart, homeWeekday, unitName, targetDate) {
   saveOverrides(overrides);
 }
 
+/* ---------- verworfene Tausch-Vorschläge bei Anfragen (persistiert, sonst
+   taucht der Vorschlag beim naechsten Neu-Rendern/Reload wieder auf) ---------- */
+
+function setSwapDismissed(issueNumber) {
+  const overrides = loadOverrides();
+  overrides.__dismissedSwaps = overrides.__dismissedSwaps || {};
+  overrides.__dismissedSwaps[issueNumber] = true;
+  saveOverrides(overrides);
+}
+function isSwapDismissed(issueNumber) {
+  const overrides = loadOverrides();
+  return !!(overrides.__dismissedSwaps && overrides.__dismissedSwaps[issueNumber]);
+}
+
 function applyMoves(data) {
   const overrides = loadOverrides();
   const moves = overrides.__moves || {};
@@ -1293,7 +1307,7 @@ function suggestSwapForRequest(text) {
   return { sourceDay, sourceUnit, targetDay, targetUnit, warnings };
 }
 
-function swapSuggestionHtml(sug) {
+function swapSuggestionHtml(sug, issueNumber) {
   return `
     <div class="swap-suggestion" style="margin-top:8px; padding:10px; border-radius:8px; background:var(--surface-2);">
       <div class="card-note"><b>Vorschlag:</b> „${escapeHtml(sug.sourceUnit.name)}" (${sug.sourceDay.weekday}) ↔ „${escapeHtml(sug.targetUnit.name)}" (${sug.targetDay.weekday}) tauschen</div>
@@ -1305,7 +1319,7 @@ function swapSuggestionHtml(sug) {
           data-source-date="${sug.sourceDay.date}" data-source-weekday="${sug.sourceUnit.homeWeekday}" data-source-unit="${escapeHtml(sug.sourceUnit.name)}"
           data-target-date="${sug.targetDay.date}" data-target-weekday="${sug.targetUnit.homeWeekday}" data-target-unit="${escapeHtml(sug.targetUnit.name)}"
           style="background:var(--teal); color:#fff;">✓ Tauschen</button>
-        <button class="btn-small dismiss-swap-btn" type="button">✗ Verwerfen</button>
+        <button class="btn-small dismiss-swap-btn" type="button" data-issue-number="${issueNumber}">✗ Verwerfen</button>
       </div>
     </div>`;
 }
@@ -1326,7 +1340,7 @@ function requestItemHtml(issue, comments) {
   const commentsHtml = (comments || []).map(c => `
     <div class="qa-answer" style="margin-top:4px; padding-left:10px; border-left:2px solid var(--ocean-600);">${escapeHtml(c.body)}</div>`).join("");
   const fullText = `${issue.title} ${issue.body || ""}`;
-  const swap = (canEdit() && isOpen) ? suggestSwapForRequest(fullText) : null;
+  const swap = (canEdit() && isOpen && !isSwapDismissed(issue.number)) ? suggestSwapForRequest(fullText) : null;
   const days = (canEdit() && isOpen && !swap) ? mentionedDaysContext(fullText) : [];
   return `
     <div class="qa-item" data-issue-number="${issue.number}">
@@ -1337,7 +1351,7 @@ function requestItemHtml(issue, comments) {
       ${issue.body && issue.body.trim() !== issue.title.trim() ? `<div class="qa-answer" style="margin-top:4px;">${escapeHtml(issue.body.slice(0, 300))}</div>` : ""}
       ${commentsHtml}
       <div class="card-note" style="margin-top:6px;">${new Date(issue.created_at).toLocaleDateString("de-DE")}</div>
-      ${swap ? swapSuggestionHtml(swap) : days.map(dayContextHtml).join("")}
+      ${swap ? swapSuggestionHtml(swap, issue.number) : days.map(dayContextHtml).join("")}
       ${(canEdit() && isOpen) ? `
         <div style="display:flex; gap:8px; margin-top:8px;">
           <input type="text" class="text-input reply-request-input" placeholder="Antwort schreiben (optional)…" style="flex:1;" />
@@ -1385,6 +1399,7 @@ async function renderRequestsList(result) {
   });
   list.querySelectorAll(".dismiss-swap-btn").forEach(btn => {
     btn.addEventListener("click", () => {
+      setSwapDismissed(btn.dataset.issueNumber);
       btn.closest(".swap-suggestion").remove();
     });
   });
