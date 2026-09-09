@@ -142,7 +142,26 @@ def estimate_week_hours(plan: dict, week_type: str):
     return round(run_hours, 1), round(bike_hours, 1), round(strength_min / 60, 1)
 
 
-def build_upcoming_plan(plan: dict, this_monday: datetime, weeks_ahead: int = 6) -> list:
+def build_week_days(plan: dict, wk_monday: datetime, activities: list, today: datetime, steps_by_date: dict) -> list:
+    week_override = plan.get("weekOverrides", {}).get(iso_date(wk_monday), {})
+    day_overrides = week_override.get("days", {})
+    return [
+        build_day(
+            plan["weekPattern"][i], wk_monday + timedelta(days=i), activities, today, steps_by_date,
+            day_override=day_overrides.get(plan["weekPattern"][i]["weekday"]),
+        )
+        for i in range(7)
+    ]
+
+
+def build_upcoming_plan(
+    plan: dict, this_monday: datetime, activities: list, today: datetime, steps_by_date: dict,
+    weeks_ahead: int = 6, detail_weeks: int = 8,
+) -> list:
+    """detail_weeks: fuer die ersten paar Wochen wird zusaetzlich die volle
+    Tag-fuer-Tag-Aufschluesselung mitgeliefert (Vorschau zum Vorausplanen im
+    Frontend) - weiter in der Zukunft waere das nur unnoetig viel Datenvolumen
+    fuer eine ohnehin repetitive, noch nicht relevante Wochenstruktur."""
     week_overrides = plan.get("weekOverrides", {})
     out = []
     for i in range(weeks_ahead):
@@ -158,6 +177,7 @@ def build_upcoming_plan(plan: dict, this_monday: datetime, weeks_ahead: int = 6)
             "bikeHours": bike_h,
             "strengthHours": strength_h,
             **({"note": override["note"]} if override and override.get("note") else {}),
+            **({"days": build_week_days(plan, wk_monday, activities, today, steps_by_date)} if i < detail_weeks else {}),
         })
     return out
 
@@ -321,19 +341,12 @@ def main():
     week_type, week_label = week_type_and_label(plan, this_monday)
     targets = plan["targetsByType"][week_type]
     weeks_to_goal = max(1, (MACRO_GOAL_DATE - this_monday).days // 7)
-    upcoming_plan = build_upcoming_plan(plan, this_monday, weeks_ahead=weeks_to_goal)
+    upcoming_plan = build_upcoming_plan(plan, this_monday, activities, today, steps_history, weeks_ahead=weeks_to_goal)
 
     week_override = plan.get("weekOverrides", {}).get(iso_date(this_monday), {})
     if week_override.get("note"):
         week_label = f"{week_label} · {week_override['note']}"
-    week_day_overrides = week_override.get("days", {})
-    week_days = [
-        build_day(
-            plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today, steps_history,
-            day_override=week_day_overrides.get(plan["weekPattern"][i]["weekday"]),
-        )
-        for i in range(7)
-    ]
+    week_days = build_week_days(plan, this_monday, activities, today, steps_history)
     week_start_str, week_end_str = iso_date(this_monday), iso_date(this_monday + timedelta(days=6))
     week_acts = [a for a in activities if week_start_str <= (a["startTime"] or "")[:10] <= week_end_str]
 

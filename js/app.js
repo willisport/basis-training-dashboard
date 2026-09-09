@@ -423,6 +423,18 @@ function weekPlanDetailText(wk) {
   return parts.join(" · ");
 }
 
+function weekPreviewDaysHtml(days) {
+  if (!days) return "";
+  return `<div class="week-grid" style="margin-top:10px;">${days.map(d => `
+    <div class="day-col">
+      <div class="day-col-head"><span class="day-name">${d.weekday}</span><span class="day-date">${fmtDateShort(d.date)}</span></div>
+      <div style="font-size:11px; color:var(--muted); margin-bottom:2px;">${escapeHtml(d.focus)}</div>
+      <div class="stack" style="gap:6px;">${d.units.length ? d.units.map(u => `
+        <div class="day-mini-unit"><span style="flex:1;">${escapeHtml(u.name)}${u.keySession ? ' <span class="unit-key-badge">Key</span>' : ""}${u.detail ? `<div class="unit-detail" style="margin-top:2px;">${escapeHtml(u.detail)}</div>` : ""}</span></div>
+      `).join("") : `<div class="card-note">Nichts geplant.</div>`}</div>
+    </div>`).join("")}</div>`;
+}
+
 function setupWeekPlanClicks(weeks) {
   const detail = document.getElementById("week-plan-detail");
   const svg = detail ? detail.closest(".card").querySelector(".chart-svg") : null;
@@ -431,7 +443,7 @@ function setupWeekPlanClicks(weeks) {
     hit.addEventListener("click", () => {
       const wk = weeks[Number(hit.dataset.weekIdx)];
       detail.style.display = "block";
-      detail.innerHTML = weekPlanDetailText(wk);
+      detail.innerHTML = weekPlanDetailText(wk) + weekPreviewDaysHtml(wk.days);
     });
   });
 }
