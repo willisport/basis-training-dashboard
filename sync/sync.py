@@ -143,11 +143,13 @@ def estimate_week_hours(plan: dict, week_type: str):
 
 
 def build_upcoming_plan(plan: dict, this_monday: datetime, weeks_ahead: int = 6) -> list:
+    week_overrides = plan.get("weekOverrides", {})
     out = []
     for i in range(weeks_ahead):
         wk_monday = this_monday + timedelta(weeks=i)
         week_type, _ = week_type_and_label(plan, wk_monday)
         run_h, bike_h, strength_h = estimate_week_hours(plan, week_type)
+        override = week_overrides.get(iso_date(wk_monday))
         out.append({
             "label": fmt_short(iso_date(wk_monday)),
             "weekType": week_type,
@@ -155,13 +157,15 @@ def build_upcoming_plan(plan: dict, this_monday: datetime, weeks_ahead: int = 6)
             "runHours": run_h,
             "bikeHours": bike_h,
             "strengthHours": strength_h,
+            **({"note": override["note"]} if override and override.get("note") else {}),
         })
     return out
 
 
-def build_day(plan_day: dict, date: datetime, activities: list, today: datetime, steps_by_date: dict) -> dict:
+def build_day(plan_day: dict, date: datetime, activities: list, today: datetime, steps_by_date: dict, day_override: dict = None) -> dict:
     date_str = iso_date(date)
     day_acts = activities_on_date(activities, date_str)
+    plan_day = {**plan_day, **(day_override or {})}
     units = []
     for pu in plan_day["units"]:
         matched = next((a for a in day_acts if unit_matches_activity(pu, a)), None)
@@ -319,8 +323,15 @@ def main():
     weeks_to_goal = max(1, (MACRO_GOAL_DATE - this_monday).days // 7)
     upcoming_plan = build_upcoming_plan(plan, this_monday, weeks_ahead=weeks_to_goal)
 
+    week_override = plan.get("weekOverrides", {}).get(iso_date(this_monday), {})
+    if week_override.get("note"):
+        week_label = f"{week_label} · {week_override['note']}"
+    week_day_overrides = week_override.get("days", {})
     week_days = [
-        build_day(plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today, steps_history)
+        build_day(
+            plan["weekPattern"][i], this_monday + timedelta(days=i), activities, today, steps_history,
+            day_override=week_day_overrides.get(plan["weekPattern"][i]["weekday"]),
+        )
         for i in range(7)
     ]
     week_start_str, week_end_str = iso_date(this_monday), iso_date(this_monday + timedelta(days=6))

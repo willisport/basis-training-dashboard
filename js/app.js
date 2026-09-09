@@ -394,6 +394,9 @@ function weekPlanBarsSVG(weeks) {
     const recoveryDot = wk.weekType === "recovery"
       ? `<circle cx="${(x + barWidth / 2).toFixed(1)}" cy="${padT - 1}" r="2" fill="var(--amber)"></circle>`
       : "";
+    const noteDot = wk.note
+      ? `<circle cx="${(x + barWidth / 2).toFixed(1)}" cy="${padT - 1}" r="2" fill="var(--sky-400)"></circle>`
+      : "";
 
     const thisMonth = monthOf(wk.label);
     const prevMonth = i > 0 ? monthOf(weeks[i - 1].label) : null;
@@ -402,10 +405,35 @@ function weekPlanBarsSVG(weeks) {
     const label = showLabel
       ? `<text class="chart-axis-label" x="${(x + barWidth / 2).toFixed(1)}" y="${h - padB + 14}" text-anchor="middle"${labelStyle}>${monthShort(thisMonth)}</text>`
       : "";
-    return `${highlight}${rects}${recoveryDot}${label}`;
+    // Grosszuegiger unsichtbarer Hit-Bereich ueber den ganzen Slot, weil die
+    // Balken bei 51 Wochen im Chart teils nur 1-2px schmal sind.
+    const hit = `<rect class="week-bar-hit" data-week-idx="${i}" x="${(padL + i * slot).toFixed(1)}" y="${padT}" width="${slot.toFixed(1)}" height="${innerH}" fill="transparent" style="cursor:pointer;"></rect>`;
+    return `${highlight}${rects}${recoveryDot}${noteDot}${label}${hit}`;
   }).join("");
 
   return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}">${gridLines}${bars}</svg>`;
+}
+
+function weekPlanDetailText(wk) {
+  if (!wk) return "";
+  const typeLabel = wk.weekType === "recovery" ? "Recovery-Woche" : "Aufbau-Woche";
+  const parts = [`<b>Woche ab ${escapeHtml(wk.label)}</b> – ${typeLabel}`];
+  if (wk.note) parts.push(escapeHtml(wk.note));
+  parts.push(`Geschätzt: ${wk.runHours}h Laufen, ${wk.bikeHours}h Rad, ${wk.strengthHours}h Kraft/EMOM/Core`);
+  return parts.join(" · ");
+}
+
+function setupWeekPlanClicks(weeks) {
+  const detail = document.getElementById("week-plan-detail");
+  const svg = detail ? detail.closest(".card").querySelector(".chart-svg") : null;
+  if (!svg || !detail) return;
+  svg.querySelectorAll(".week-bar-hit").forEach(hit => {
+    hit.addEventListener("click", () => {
+      const wk = weeks[Number(hit.dataset.weekIdx)];
+      detail.style.display = "block";
+      detail.innerHTML = weekPlanDetailText(wk);
+    });
+  });
 }
 
 /* ---------- shared: full week overview (Heute + Woche + Kraft) ---------- */
@@ -753,8 +781,9 @@ function renderWoche(data) {
       </div>
 
       <div class="card">
-        <div class="card-head"><span class="card-title">Trainingsplan – nächste Wochen</span><span class="card-note">Geschätzte Stunden aus den Wochenzielen · <span style="color:var(--amber);">•</span> Recovery-Woche</span></div>
+        <div class="card-head"><span class="card-title">Trainingsplan – nächste Wochen</span><span class="card-note">Anklicken für Details · <span style="color:var(--amber);">•</span> Recovery · <span style="color:var(--sky-400);">•</span> Besonderheit</span></div>
         ${weekPlanBarsSVG(data.upcomingPlan || [])}
+        <div id="week-plan-detail" class="card-note" style="margin-top:8px; display:none;"></div>
         <div style="display:flex; gap:16px; margin-top:6px; font-size:11px; color:var(--muted); flex-wrap:wrap;">
           <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--sky-400); display:inline-block;"></span>Laufen</span>
           <span style="display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:3px; background:var(--ocean-600); display:inline-block;"></span>Radfahren</span>
@@ -762,6 +791,7 @@ function renderWoche(data) {
         </div>
       </div>
     </div>`;
+  setupWeekPlanClicks(data.upcomingPlan || []);
 }
 
 /* ---------- render: Verlauf ---------- */

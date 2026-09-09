@@ -65,16 +65,9 @@
     },
     {
       "weekday": "Donnerstag",
-      "focus": "Rad Zone 2 + Arme/Schultern",
+      "focus": "Erholungstag – Rad Zone 1 (locker)",
       "units": [
-        { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "60 min", "plannedDurationMin": 60, "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
-        { "name": "Arme/Schultern", "type": "kraft", "tag": "ergaenzung", "detail": "Schulterdrücken, Seitheben, hintere Schulter, Bizeps-/Trizepsdrücken · 3×10–12 Wdh.", "plannedDurationMin": 25, "exercises": [
-          { "name": "Schulterdrücken", "sets": 3, "reps": "10–12", "rest": "60 s" },
-          { "name": "Seitheben", "sets": 3, "reps": "10–12", "rest": "60 s" },
-          { "name": "Hintere Schulter (Reverse Flys)", "sets": 3, "reps": "10–12", "rest": "60 s" },
-          { "name": "Bizepscurls", "sets": 3, "reps": "10–12", "rest": "60 s" },
-          { "name": "Trizepsdrücken", "sets": 3, "reps": "10–12", "rest": "60 s" }
-        ], "matchHint": { "activityTypes": ["strength_training"] } }
+        { "name": "Rad Zone 1 (locker)", "type": "rad", "tag": "ergaenzung", "detail": "30 min, ganz locker – nur zur Durchblutung, kein Training", "plannedDurationMin": 30, "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } }
       ]
     },
     {
@@ -89,11 +82,17 @@
     },
     {
       "weekday": "Samstag",
-      "focus": "Rad Zone 2 + Core",
+      "focus": "Rad Zone 2 + Core + Arme/Schultern",
       "units": [
         { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "", "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
         { "name": "Core", "type": "core", "tag": "ergaenzung", "detail": "15 min", "plannedDurationMin": 15, "matchHint": { "activityTypes": ["strength_training", "cardio"] } },
-        { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "10 min: jede Minute 10 Klimmzüge + 15 Liegestütze", "planLabel": "Plan 1", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
+        { "name": "Arme/Schultern", "type": "kraft", "tag": "ergaenzung", "detail": "Schulterdrücken, Seitheben, hintere Schulter, Bizeps-/Trizepsdrücken · 3×10–12 Wdh.", "plannedDurationMin": 25, "exercises": [
+          { "name": "Schulterdrücken", "sets": 3, "reps": "10–12", "rest": "60 s" },
+          { "name": "Seitheben", "sets": 3, "reps": "10–12", "rest": "60 s" },
+          { "name": "Hintere Schulter (Reverse Flys)", "sets": 3, "reps": "10–12", "rest": "60 s" },
+          { "name": "Bizepscurls", "sets": 3, "reps": "10–12", "rest": "60 s" },
+          { "name": "Trizepsdrücken", "sets": 3, "reps": "10–12", "rest": "60 s" }
+        ], "matchHint": { "activityTypes": ["strength_training"] } }
       ]
     },
     {
@@ -105,6 +104,29 @@
       ]
     }
   ],
+
+  "weekOverrides": {
+    "2026-09-14": {
+      "note": "Ruhigere Woche – FTP-Test + Regatta-Wochenende ab Freitagmittag",
+      "days": {
+        "Dienstag": {
+          "focus": "FTP-Test (Zwift)",
+          "units": [
+            { "name": "FTP-Test (Zwift)", "type": "rad", "tag": "pflicht", "detail": "Ramp-Test oder 20-Minuten-Test zur FTP-Bestimmung auf dem Indoor-Trainer", "plannedDurationMin": 45, "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } }
+          ]
+        },
+        "Freitag": { "focus": "Unterwegs zur Regatta – frei", "units": [], "fallbackNote": null },
+        "Samstag": { "focus": "Regatta / Feiern – frei", "units": [] },
+        "Sonntag": { "focus": "Regatta-Wochenende – frei", "units": [] }
+      }
+    },
+    "2026-09-21": {
+      "note": "Erholung nach dem Regatta-Wochenende",
+      "days": {
+        "Montag": { "focus": "Rest Day nach Regatta-Wochenende", "units": [] }
+      }
+    }
+  },
 
   "selfCoaching": [
     "Schweres Beintraining moderat fahren – 2–3 Wiederholungen im Tank lassen.",
