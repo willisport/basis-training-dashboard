@@ -256,6 +256,17 @@ def detect_overload(trend: list):
     return None
 
 
+def load_trend_note(load_vs_avg_pct: int):
+    """Kurzer Hinweis, wenn die Wochenbelastung deutlich schneller steigt als der
+    4-Wochen-Schnitt - haeufigste Ursache fuer Ueberlastungsverletzungen ist ein
+    zu schneller Umfangssprung, nicht der absolute Umfang."""
+    if load_vs_avg_pct >= 100:
+        return {"level": "high", "text": f"Belastung {load_vs_avg_pct}% über dem 4-Wochen-Schnitt – großer Sprung, lieber im Auge behalten und bei Bedarf einen Gang runterschalten."}
+    if load_vs_avg_pct >= 50:
+        return {"level": "medium", "text": f"Belastung {load_vs_avg_pct}% über dem 4-Wochen-Schnitt – Umfang steigt zügig, auf Beine/Erholung achten."}
+    return None
+
+
 def weight_avg_in_week(weights: list, monday_str: str, sunday_str: str, fallback=None):
     vals = [w["weightKg"] for w in weights if monday_str <= w["date"] <= sunday_str]
     return round(sum(vals) / len(vals), 1) if vals else fallback
@@ -319,6 +330,7 @@ def main():
     bike_volume_km = round(sum(a["distanceKm"] for a in week_acts if a["type"] == "rad"), 1)
     volume_km = round(run_volume_km + bike_volume_km, 1)
     time_min = round(sum(a["durationMin"] for a in week_acts), 0)
+    elevation_gain_m = round(sum(a.get("elevationGainM") or 0 for a in week_acts))
 
     prev_weeks_acts = [
         a for a in activities
@@ -339,6 +351,8 @@ def main():
             "zone2SharePct": hr_weighted_share(week_acts, plan["profile"]["zone2HrLow"], plan["profile"]["zone2HrHigh"]),
             "hardSharePct": hr_hard_share(week_acts, plan["profile"]["zone2HrHigh"]),
             "loadVsAvgPct": load_vs_avg,
+            "loadTrendNote": load_trend_note(load_vs_avg),
+            "elevationGainM": elevation_gain_m,
         },
         "days": week_days,
         "selfCoaching": plan["selfCoaching"],

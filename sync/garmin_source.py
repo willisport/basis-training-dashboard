@@ -56,6 +56,7 @@ def _normalize_activity(a: dict) -> dict:
         "distanceKm": round(distance_km, 2),
         "durationMin": round(duration_min, 1),
         "avgHr": avg_hr,
+        "elevationGainM": round(a.get("elevationGain") or 0),
     }
     if entry["type"] in ("lauf",) and distance_km > 0.3:
         entry["paceSecPerKm"] = duration_s / distance_km

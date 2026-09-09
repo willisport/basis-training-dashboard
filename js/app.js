@@ -734,7 +734,9 @@ function renderWoche(data) {
         <div class="bar-block" style="margin-top:14px;">
           <div class="bar-top"><span class="name">Belastung vs. Schnitt (letzte 4 Wochen)</span><span class="value">${w.actuals.loadVsAvgPct > 0 ? "+" : ""}${w.actuals.loadVsAvgPct}%</span></div>
           <div class="bar-track"><div class="bar-fill ${w.actuals.loadVsAvgPct < -30 ? "low" : ""}" style="width:${clamp(w.actuals.loadVsAvgPct + 100, 0, 100)}%"></div></div>
+          ${w.actuals.loadTrendNote ? `<div class="card-note" style="margin-top:6px; color:${w.actuals.loadTrendNote.level === "high" ? "var(--amber)" : "var(--text-dim)"};">${escapeHtml(w.actuals.loadTrendNote.text)}</div>` : ""}
         </div>
+        <div class="card-note" style="margin-top:10px;">Höhenmeter diese Woche: <b>${w.actuals.elevationGainM.toLocaleString("de-DE")} hm</b></div>
       </div>
 
       <div class="week-grid">${buildWeekOverview(data)}</div>
