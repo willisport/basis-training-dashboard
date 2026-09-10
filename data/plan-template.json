@@ -106,6 +106,19 @@
   ],
 
   "weekOverrides": {
+    "2026-09-07": {
+      "days": {
+        "Freitag": {
+          "focus": "Intervalle + Rad Zone 2 (statt Bein-Supersätze)",
+          "units": [
+            { "name": "Intervalle", "type": "lauf", "tag": "pflicht", "detail": "4×4 min hart (Zielpace ~4:15–4:30 min/km, nahe Schwellen-HF 175 bpm) / 3 min locker traben", "plannedDurationMin": 40, "keySession": true, "matchHint": { "activityTypes": ["running"] } },
+            { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "60 min, statt Bein-Supersätze", "plannedDurationMin": 60, "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
+            { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "10 min: jede Minute 10 Klimmzüge + 10 Dips", "planLabel": "Plan 2", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
+          ],
+          "fallbackNote": null
+        }
+      }
+    },
     "2026-09-14": {
       "note": "Ruhigere Woche – FTP-Test + Regatta-Wochenende ab Freitagmittag",
       "days": {
