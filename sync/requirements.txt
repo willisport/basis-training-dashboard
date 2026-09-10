@@ -4,3 +4,4 @@ ua-generator
 renpho-api
 python-dotenv
 cryptography
+tzdata

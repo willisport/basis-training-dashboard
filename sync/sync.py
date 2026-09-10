@@ -18,6 +18,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -34,6 +35,9 @@ PLAN_PATH = ROOT / "data" / "plan-template.json"
 OUTPUT_PATH = ROOT / "data" / "training-data.json"
 ENCRYPTED_OUTPUT_PATH = ROOT / "data" / "training-data.enc.json"
 
+LOCAL_TZ = ZoneInfo("Europe/Berlin")  # GitHub-Actions-Runner laufen in UTC - ohne das
+# faellt "heute" naeher an Mitternacht (v.a. 22-24 Uhr deutscher Zeit) faelschlich noch
+# auf gestern, weil UTC dann noch den Vortag zeigt.
 WINDOW_WEEKS = 9  # 8 Wochen Performance-Verlauf + aktuelle Woche
 MACRO_GOAL_DATE = datetime(2027, 8, 31)  # Zielmonat des Ultramarathons - Makro-Uebersicht laeuft bis hierhin
 GITHUB_REPO_FULL = "willisport/willisport.github.io"
@@ -301,7 +305,7 @@ def main():
     plan = load_json(PLAN_PATH)
     previous = load_json(OUTPUT_PATH) if OUTPUT_PATH.exists() else {}
 
-    today = datetime.now()
+    today = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     this_monday = monday_of(today)
     window_start = this_monday - timedelta(weeks=WINDOW_WEEKS - 1)
 
