@@ -923,6 +923,8 @@ function renderPerformance(data) {
           deltaInfo(first.weightKg, last.weightKg, { decimals: 1, unit: " kg", sinceLabel: first.label, lowerIsBetter: true }))}
         ${weeks.some(w => w.avgSteps != null) ? statCard("Schritte Ø/Tag", fmtVal(last.avgSteps), "", sparkOf("avgSteps"),
           deltaInfo(first.avgSteps, last.avgSteps, { sinceLabel: first.label })) : ""}
+        ${weeks.some(w => w.completionPct != null) ? statCard("Erledigungsquote", fmtVal(last.completionPct), "%", sparkOf("completionPct"),
+          deltaInfo(first.completionPct, last.completionPct, { unit: " %", sinceLabel: first.label })) : ""}
       </div>
 
       <div class="grid grid-2">

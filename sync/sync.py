@@ -295,6 +295,24 @@ def load_trend_note(load_vs_avg_pct: int):
     return None
 
 
+def pflicht_completion_pct(week_days: list, today: datetime):
+    """Anteil der Pflicht-Einheiten, die tatsaechlich erledigt wurden - nur Tage bis
+    heute zaehlen mit, noch bevorstehende Tage der Woche sollen die Quote nicht
+    kuenstlich verwaessern."""
+    today_str = iso_date(today)
+    total, done = 0, 0
+    for d in week_days:
+        if d["date"] > today_str:
+            continue
+        for u in d["units"]:
+            if u["tag"] != "pflicht":
+                continue
+            total += 1
+            if u["status"] == "done":
+                done += 1
+    return round(done / total * 100) if total > 0 else None
+
+
 def weight_avg_in_week(weights: list, monday_str: str, sunday_str: str, fallback=None):
     vals = [w["weightKg"] for w in weights if monday_str <= w["date"] <= sunday_str]
     return round(sum(vals) / len(vals), 1) if vals else fallback
@@ -457,6 +475,7 @@ def main():
             for d in [iso_date(wk_monday + timedelta(days=i))]
             if d in steps_history and steps_history[d].get("steps") is not None
         ]
+        wk_days_detail = build_week_days(plan, wk_monday, activities, today, steps_history)
         perf_weeks.append({
             "label": fmt_short(iso_date(wk_monday)),
             "vo2max": value_on_or_before(vo2max_history, iso_date(wk_sunday)),
@@ -465,6 +484,7 @@ def main():
             "bikeVolumeKm": round(sum(a["distanceKm"] for a in wk_acts if a["type"] == "rad"), 1),
             "weightKg": weight_avg_in_week(weights, iso_date(wk_monday), iso_date(wk_sunday)),
             "avgSteps": round(sum(wk_steps) / len(wk_steps)) if wk_steps else None,
+            "completionPct": pflicht_completion_pct(wk_days_detail, today),
         })
     # Luecken bei vo2max/weightKg mit letztem bekannten Wert auffuellen
     last_v, last_w = None, None
