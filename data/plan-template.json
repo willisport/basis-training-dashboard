@@ -19,8 +19,8 @@
   },
 
   "targetsByType": {
-    "aufbau": { "runVolumeKm": 35, "bikeVolumeKm": 130, "timeMin": 480, "zone2SharePct": 82 },
-    "recovery": { "runVolumeKm": 20, "bikeVolumeKm": 80, "timeMin": 300, "zone2SharePct": 90 }
+    "aufbau": { "runVolumeKm": 23, "bikeVolumeKm": 130, "timeMin": 480, "zone2SharePct": 82 },
+    "recovery": { "runVolumeKm": 15, "bikeVolumeKm": 80, "timeMin": 300, "zone2SharePct": 90 }
   },
 
   "weekPattern": [
