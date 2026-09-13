@@ -137,9 +137,9 @@
       "note": "Ruhigere Woche – FTP-Test + Regatta-Wochenende ab Freitagmittag",
       "days": {
         "Montag": {
-          "focus": "Zone-2-Lauf (Beintraining diese Woche auf Donnerstag verschoben)",
+          "focus": "Lockeres Rad statt Laufen (Beine lockern vor FTP-Test, Beintraining diese Woche auf Donnerstag verschoben)",
           "units": [
-            { "name": "Zone-2-Lauf", "type": "lauf", "tag": "pflicht", "detail": "6–8 km · 130–140 bpm", "matchHint": { "activityTypes": ["running"] } },
+            { "name": "Rad Zone 1 (locker)", "type": "rad", "tag": "pflicht", "detail": "30–45 min, ganz entspannt – Beine lockern vor dem FTP-Test morgen", "plannedDurationMin": 30, "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
             { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "10 min: jede Minute 10 Klimmzüge + 15 Liegestütze", "planLabel": "Plan 1", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
           ]
         },
