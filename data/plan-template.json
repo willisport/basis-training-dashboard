@@ -125,11 +125,10 @@
           ]
         },
         "Sonntag": {
-          "focus": "Rad Zone 2 (1h) + Lauf (6 km) + EMOM",
+          "focus": "Lauf (6 km) + Core (kein Rad, kein EMOM – Muskelkater)",
           "units": [
-            { "name": "Rad Zone 2", "type": "rad", "tag": "pflicht", "detail": "60 min", "plannedDurationMin": 60, "matchHint": { "activityTypes": ["cycling", "indoor_cycling", "virtual_ride"] } },
             { "name": "Lauf", "type": "lauf", "tag": "pflicht", "detail": "6 km · Zone 2 (130–140 bpm)", "matchHint": { "activityTypes": ["running"], "minDistanceKm": 4 } },
-            { "name": "EMOM", "type": "emom", "tag": "bonus", "detail": "10 min: jede Minute 10 Klimmzüge + 10 Dips", "planLabel": "Plan 2", "plannedDurationMin": 10, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
+            { "name": "Core", "type": "core", "tag": "ergaenzung", "detail": "15 min", "plannedDurationMin": 15, "matchHint": { "activityTypes": ["strength_training", "cardio"] } }
           ]
         }
       }
